@@ -3,8 +3,9 @@ model_id: google/byt5-small
 model_type: seq2seq
 normalize: false
 precision: fp32
-batch_size: 8
-grad_accum: 2
+# 8 x 2 ran out of memory on the shared T4 (~10 GB free) in the smoke test; same effective batch.
+batch_size: 4
+grad_accum: 4
 gradient_checkpointing: false
 lr_grid: [1.0e-4, 3.0e-4, 5.0e-4]
 epochs: 15

@@ -236,8 +236,8 @@ def write_json(path: Path, data: dict) -> None:
 def run(cfg: dict, setting: str, seed: int, lr_search: float | None, smoke: bool) -> None:
     name = cfg["model_name"]
     rel = Path("lr_search", f"lr{lr_search:g}") if lr_search else Path(setting)
-    run_dir = SMOKE_DIR / name if smoke else RUNS / name / rel / f"seed{seed}"
-    ckpt_dir = Path("checkpoints/_smoke") / name if smoke else CHECKPOINT_RUNS / name / rel / f"seed{seed}"
+    run_dir = SMOKE_DIR / name / setting if smoke else RUNS / name / rel / f"seed{seed}"
+    ckpt_dir = Path("checkpoints/_smoke") / name / setting if smoke else CHECKPOINT_RUNS / name / rel / f"seed{seed}"
     if (run_dir / "metrics.json").exists():
         print(f"skip {run_dir}: metrics.json exists")
         return

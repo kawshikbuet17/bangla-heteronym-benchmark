@@ -5,6 +5,7 @@
 Test = main split test set (3 sentences per pronunciation, 1,104 sentences), mean ± std over seeds 42/43/44.
 Latency = batch size 1, full path (normalizer + tokenizer + model + decoding), p50.
 
+<!-- results-table -->
 | # | model | size | precision | best lr | test acc | macro-F1 | train time | GPU p50 (ms) | CPU p50 (ms, 4 thr) | checkpoint | status |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | 1 | banglabert_small | 13.7M | fp16 | | | | | | | | pending |
@@ -22,6 +23,7 @@ Latency = batch size 1, full path (normalizer + tokenizer + model + decoding), p
 | 13 | mt5_base | ~580M | fp32 | | | | | | | | pending (optional) |
 
 Disk used by `checkpoints/`: 0 (nothing kept yet).
+<!-- /results-table -->
 
 ## Observations for the paper
 
@@ -34,6 +36,49 @@ Disk used by `checkpoints/`: 0 (nothing kept yet).
   `do_lower_case=False, strip_accents=False`. Anyone using the hub default gets a crippled tokenizer.
 
 ## Entries (newest first)
+
+### 2026-10-18 17:15: Stage 2, smoke test
+
+**Run.** `bash scripts/smoke.sh <all 13 models> banglabert_small:{cand_main,abl_marker_special,abl_marker_none,abl_head_mean,abl_head_cls} mt5_small:abl_output_target`:
+20 optimizer steps on a tiny train subset (20 × effective batch), 64 dev sentences, then checkpoint save,
+reload from the folder and evaluation. Logs in `logs/smoke_*.log`, results in `logs/smoke/` (not committed).
+
+**Result.** All 13 models and all 6 extra settings (candidate scoring, special-token / no marker, mean / [CLS]
+head, target-only seq2seq output) run end to end. No NaN in any fp16 run. Peak training memory (allocated /
+reserved) and time for 20 steps:
+
+| model | params | peak alloc | reserved | 20 steps |
+|---|---|---|---|---|
+| banglabert_small | 13.7M | 0.3 GB | 0.3 GB | 3.0 s |
+| banglabert | 110.0M | 2.1 GB | 2.4 GB | 3.6 s |
+| bangla_bert_base | 164.4M | 3.2 GB | 3.5 GB | 4.2 s |
+| muril_base | 237.6M | 4.6 GB | 4.8 GB | 5.1 s |
+| banglat5 | 247.6M | 4.8 GB | 5.6 GB | 14.2 s |
+| xlm_roberta_base | 278.0M | 5.3 GB | 5.6 GB | 5.3 s |
+| indicbertv2_mlm | 278.0M | 5.4 GB | 5.5 GB | 5.2 s |
+| mdeberta_v3_base | 278.2M | 5.9 GB | 6.7 GB | 11.8 s |
+| mt5_small | 300.2M | 6.4 GB | 10.1 GB | 10.7 s |
+| byt5_small (4×4) | 299.6M | 7.6 GB | 9.2 GB | 86.4 s |
+| banglabert_large | 335.6M | 6.4 GB | 6.8 GB | 11.5 s |
+| xlm_roberta_large | 559.9M | 10.7 GB | 11.0 GB | 17.8 s |
+| mt5_base | 582.4M | 11.2 GB | 12.6 GB | 21.3 s |
+
+**Problems and fixes.**
+- byt5_small OOM at 8 × 2 with ~10 GB free; the automatic fallback ran it at 4 × 4 (same effective batch 16).
+  Config changed to 4 × 4.
+- xlm_roberta_large and mt5_base OOM even at batch 1 + gradient checkpointing: AdamW with fp32 master weights
+  needs ~9 GB for 560-580M parameters before activations, and only ~10.1 GB of the T4 is free (two triton
+  docker containers, `fast_whisper_triton_test` and `dialect_translation_triton`, hold ~4.5 GB). With the
+  owner's permission the two containers were stopped from 17:08:55 to 17:10:53 (restarted with `docker start`,
+  both healthy again at ~17:12): both models then run at the planned 8 × 4 / 8 × 2 settings. Plan: stop the
+  containers again only for these two models' runs, restart right after, log the downtime.
+- mt5_small reserves 10.1 GB for 6.4 GB allocated (fragmentation); `scripts/env.sh` now sets
+  `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`.
+
+**Cost notes.** ByT5 is slow: byte-level sequences (up to ~300 bytes in, ~290 out) make one epoch ~23 min plus
+dev generation; worst case (15 epochs) is many hours per run. Will estimate before running it.
+
+**Next.** Stage 3: banglabert_small full cycle (estimated ~25 min).
 
 ### 2026-10-18 16:30: Stage 1, setup
 

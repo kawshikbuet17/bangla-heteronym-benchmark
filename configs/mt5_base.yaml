@@ -1,3 +1,5 @@
+# Needs the whole T4: OOMs even at batch 1 + gradient checkpointing with ~10 GB free (fp32 AdamW states).
+# Stop the two triton containers on the T4 for these runs (docker stop/start), see EXPERIMENT_LOG.md.
 model_name: mt5_base
 model_id: google/mt5-base
 model_type: seq2seq

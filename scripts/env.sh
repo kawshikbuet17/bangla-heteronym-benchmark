@@ -4,5 +4,6 @@ conda activate hetero
 export CUDA_DEVICE_ORDER=PCI_BUS_ID
 export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-1}
 export TOKENIZERS_PARALLELISM=false
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True  # less fragmentation on the shared ~10 GB
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 mkdir -p logs
