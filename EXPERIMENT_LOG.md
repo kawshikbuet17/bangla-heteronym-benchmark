@@ -13,7 +13,7 @@ Latency = batch size 1, full path (normalizer + tokenizer + model + decoding), p
 | 3 | bangla_bert_base | 164.4M | fp16 | 2e-05 | 98.01 ± 0.39 | 97.93 ± 0.41 | 4.4 | 10.6 | 30.5 | 633 MB | done |
 | 4 | muril_base | 237.6M | fp16 | 5e-05 | 95.89 ± 1.04 | 95.54 ± 1.13 | 5.7 | 10.3 | 39.8 | 915 MB | done |
 | 5 | banglat5 | 247.6M | fp32 | 0.0005 | 98.37 ± 0.18 | 98.37 ± 0.12 | 31.4 | 235.6 | 317.4 | 948 MB | done |
-| 6 | xlm_roberta_base | ~278M |  |  |  |  |  |  |  |  | pending |
+| 6 | xlm_roberta_base | 278.0M | fp16 | 2e-05 | 97.37 ± 0.39 | 97.27 ± 0.36 | 6.5 | 10.3 | 37.5 | 1082 MB | done |
 | 7 | indicbertv2_mlm | ~278M |  |  |  |  |  |  |  |  | pending |
 | 8 | mdeberta_v3_base | ~280M |  |  |  |  |  |  |  |  | pending |
 | 9 | mt5_small | ~300M |  |  |  |  |  |  |  |  | pending |
@@ -22,7 +22,7 @@ Latency = batch size 1, full path (normalizer + tokenizer + model + decoding), p
 | 12 | xlm_roberta_large | ~560M |  |  |  |  |  |  |  |  | pending |
 | 13 | mt5_base | ~580M |  |  |  |  |  |  |  |  | pending |
 
-Disk used by `checkpoints/`: 3.0G.
+Disk used by `checkpoints/`: 4.0G.
 <!-- /results-table -->
 
 ## Observations for the paper
@@ -36,6 +36,39 @@ Disk used by `checkpoints/`: 3.0G.
   `do_lower_case=False, strip_accents=False`. Anyone using the hub default gets a crippled tokenizer.
 
 ## Entries (newest first)
+
+### 2026-10-19 03:02: xlm_roberta_base (model 6), full cycle
+
+**Run.** Queue, `bash scripts/run_model.sh xlm_roberta_base` (encoder classifier, no normalizer, fp16, 32 × 1).
+02:17 -> 03:02 (44 min).
+
+**lr search (dev).** 1e-5: 97.64 · **2e-5: 98.01** · 3e-5: 97.74 · 5e-5: 97.46.
+
+**Result (lr 2e-5).** Test accuracy **97.37 ± 0.39** (97.55 / 96.92 / 97.64), macro-F1 97.27 ± 0.36;
+2-reading 97.5%, 3-reading 90.7%. Dev 98.01 / 97.37 / 97.28; seed 42 kept. Best epochs 8 / 6 / 8, 6.5 min per
+seed, peak training memory 5.3 GB, checkpoint 1.08 GB (250k-token vocab: 192M of the 278M parameters are
+embeddings).
+
+**Latency.**
+
+| device | precision | p50 | p95 | p99 | forward p50 | throughput | paragraph (8 heteronyms) |
+|---|---|---|---|---|---|---|---|
+| T4 GPU | fp16 | 10.3 ms | 11.9 ms | 14.6 ms | 9.5 ms | 699 /s (b8), 1845 /s (b32) | 11.7 ms (1.5 ms/heteronym) |
+| CPU, 4 threads | fp32 | 37.5 ms | 53.9 ms | 65.6 ms | 36.1 ms | 38 /s (b8) | 278.2 ms (34.8 ms/heteronym) |
+| CPU, 1 thread | fp32 | 95.9 ms | 125.2 ms | 140.7 ms | 97.2 ms | - | 912.4 ms (114.1 ms/heteronym) |
+
+Peak GPU memory at inference: 562 MB.
+
+**phoneticize demo.** All 8 correct (কর 0.94, others ≥ 0.996).
+
+**Observations.** Multilingual XLM-R base sits between MuRIL (95.89) and bangla-bert-base (98.01), 2.1 points
+below BanglaBERT: so far every Bangla-only model beats every multilingual one of similar size. Most of its
+parameters are the 250k-token embedding table, so its compute per token (and GPU latency) equals that of the
+other 12-layer base models. Hardest: আসলে (50.0%), চরে / দেব (72.2%).
+
+**Problems.** None.
+
+**Next.** indicbertv2_mlm (started 03:02).
 
 ### 2026-10-19 02:18: banglat5 (model 5), full cycle
 
