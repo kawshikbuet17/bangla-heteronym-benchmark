@@ -1,0 +1,10 @@
+{
+  "seed": 42,
+  "dev_accuracy_by_seed": {
+    "seed42": 0.9864130434782609,
+    "seed43": 0.9855072463768116,
+    "seed44": 0.9864130434782609
+  },
+  "checkpoint": "checkpoints/indicbertv2_mlm",
+  "size_mb": 1068.1
+}
