@@ -11,7 +11,7 @@ Latency = batch size 1, full path (normalizer + tokenizer + model + decoding), p
 | 1 | banglabert_small | 13.7M | fp16 | 0.0001 | 98.16 ± 0.14 | 98.09 ± 0.13 | 2.5 | 12.6 | 13.0 | 54 MB | done |
 | 2 | banglabert | 110.0M | fp16 | 2e-05 | 99.46 ± 0.16 | 99.40 ± 0.16 | 3.7 | 12.5 | 32.8 | 421 MB | done |
 | 3 | bangla_bert_base | 164.4M | fp16 | 2e-05 | 98.01 ± 0.39 | 97.93 ± 0.41 | 4.4 | 10.6 | 30.5 | 633 MB | done |
-| 4 | muril_base | ~237M |  |  |  |  |  |  |  |  | pending |
+| 4 | muril_base | 237.6M | fp16 | 5e-05 | 95.89 ± 1.04 | 95.54 ± 1.13 | 5.7 | 10.3 | 39.8 | 915 MB | done |
 | 5 | banglat5 | ~250M |  |  |  |  |  |  |  |  | pending |
 | 6 | xlm_roberta_base | ~278M |  |  |  |  |  |  |  |  | pending |
 | 7 | indicbertv2_mlm | ~278M |  |  |  |  |  |  |  |  | pending |
@@ -22,7 +22,7 @@ Latency = batch size 1, full path (normalizer + tokenizer + model + decoding), p
 | 12 | xlm_roberta_large | ~560M |  |  |  |  |  |  |  |  | pending |
 | 13 | mt5_base | ~580M |  |  |  |  |  |  |  |  | pending |
 
-Disk used by `checkpoints/`: 1.1G.
+Disk used by `checkpoints/`: 2.0G.
 <!-- /results-table -->
 
 ## Observations for the paper
@@ -36,6 +36,39 @@ Disk used by `checkpoints/`: 1.1G.
   `do_lower_case=False, strip_accents=False`. Anyone using the hub default gets a crippled tokenizer.
 
 ## Entries (newest first)
+
+### 2026-10-18 23:04: muril_base (model 4), full cycle
+
+**Run.** Queue, `bash scripts/run_model.sh muril_base` (encoder classifier, no normalizer, fp16, 32 × 1).
+22:24 -> 23:03 (39 min).
+
+**lr search (dev).** 1e-5: 94.47 · 2e-5: 96.11 · 3e-5: 95.56 · **5e-5: 97.10**.
+
+**Result (lr 5e-5).** Test accuracy **95.89 ± 1.04** (96.92 / 95.92 / 94.84), macro-F1 95.54 ± 1.13;
+2-reading 96.3%, 3-reading 68.5%. Dev 97.10 / 95.74 / 96.56; seed 42 kept. Best epochs 8 / 8 / 7 (no early stop),
+5.7 min per seed, peak training memory 4.5 GB, checkpoint 915 MB (197k-token vocab).
+
+**Latency.**
+
+| device | precision | p50 | p95 | p99 | forward p50 | throughput | paragraph (8 heteronyms) |
+|---|---|---|---|---|---|---|---|
+| T4 GPU | fp16 | 10.3 ms | 11.0 ms | 11.7 ms | 9.9 ms | 689 /s (b8), 1976 /s (b32) | 11.7 ms (1.5 ms/heteronym) |
+| CPU, 4 threads | fp32 | 39.8 ms | 50.6 ms | 57.6 ms | 37.7 ms | 42 /s (b8) | 219.5 ms (27.4 ms/heteronym) |
+| CPU, 1 thread | fp32 | 104.5 ms | 132.9 ms | 146.8 ms | 103.5 ms | - | 770.0 ms (96.2 ms/heteronym) |
+
+Peak GPU memory at inference: 479 MB.
+
+**phoneticize demo.** All 8 correct, but with flat confidences (0.96 for 6 words, 0.74 for খেল and কর).
+
+**Observations.** Weakest model so far and the least stable across seeds (±1.04). The best lr is the top of the
+planned base grid and the confidences saturate around 0.96, which suggests MuRIL is under-trained with this
+budget (10 epochs, ≤ 5e-5) rather than unable to learn the task; kept as planned for comparability and worth a
+sentence in the paper. Multilingual (17 Indian languages) MuRIL is 3.6 points below Bangla-only BanglaBERT of
+similar size. 3-reading words are much harder for it (68.5%); hardest: করাত, কাল, কর (66.7%).
+
+**Problems.** None at run time.
+
+**Next.** banglat5 (started 23:03).
 
 ### 2026-10-18 22:25: bangla_bert_base (model 3), full cycle
 

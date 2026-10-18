@@ -1,0 +1,10 @@
+{
+  "seed": 42,
+  "dev_accuracy_by_seed": {
+    "seed42": 0.9710144927536232,
+    "seed43": 0.957427536231884,
+    "seed44": 0.9655797101449275
+  },
+  "checkpoint": "checkpoints/muril_base",
+  "size_mb": 915.4
+}
