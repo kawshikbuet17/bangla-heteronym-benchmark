@@ -1,0 +1,4 @@
+model,setting,seed,test_set,model_type,precision,batch,lr,adjustments,accuracy,macro_f1,acc_2_readings,acc_3_readings,other_word_change_rate,avg_generated_tokens,dev_accuracy,train_time_s,epochs_trained,best_epoch,best_dev_accuracy_during_training,steps,peak_gpu_memory_train_mb,peak_gpu_memory_reserved_train_mb,params,checkpoint_size_mb
+banglabert_small,main,42,test,encoder,fp16,32x1,0.0001,,0.9827898550724637,0.9820005175983436,0.9843462246777164,0.8888888888888888,,,0.9855072463768116,150.1,10.0,8,0.9855072463768116,1610,318,336,13672963,53.7
+banglabert_small,main,43,test,encoder,fp16,32x1,0.0001,,0.980072463768116,0.9794319358178053,0.9825046040515654,0.8333333333333334,,,0.9827898550724637,148.3,10.0,9,0.9827898550724637,1610,318,338,13672963,53.7
+banglabert_small,main,44,test,encoder,fp16,32x1,0.0001,,0.9818840579710145,0.9812952898550725,0.9852670349907919,0.7777777777777778,,,0.9836956521739131,150.8,10.0,8,0.9836956521739131,1610,318,336,13672963,53.7

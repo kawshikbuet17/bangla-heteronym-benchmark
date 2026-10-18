@@ -95,7 +95,9 @@ Full tables: [results/summary.md](results/summary.md), [results/latency.csv](res
 [EXPERIMENT_LOG.md](EXPERIMENT_LOG.md) (setup, problems, decisions, observations).
 
 <!-- results-table -->
-No finished models yet.
+| # | model | size | precision | best lr | test acc (%) | macro-F1 (%) | train time / seed (min) | GPU p50 (ms) | CPU p50 (ms, 4 thr) |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | banglabert_small | 13.7M | fp16 | 0.0001 | 98.16 ± 0.14 | 98.09 ± 0.13 | 2.5 | 12.6 | 13.0 |
 <!-- /results-table -->
 
 ## 7. Repo layout

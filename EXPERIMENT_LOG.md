@@ -6,23 +6,23 @@ Test = main split test set (3 sentences per pronunciation, 1,104 sentences), mea
 Latency = batch size 1, full path (normalizer + tokenizer + model + decoding), p50.
 
 <!-- results-table -->
-| # | model | size | precision | best lr | test acc | macro-F1 | train time | GPU p50 (ms) | CPU p50 (ms, 4 thr) | checkpoint | status |
+| # | model | size | precision | best lr | test acc (%) | macro-F1 (%) | train time / seed (min) | GPU p50 (ms) | CPU p50 (ms, 4 thr) | checkpoint | status |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| 1 | banglabert_small | 13.7M | fp16 | | | | | | | | pending |
-| 2 | banglabert | ~110M | fp16 | | | | | | | | pending |
-| 3 | bangla_bert_base | ~165M | fp16 | | | | | | | | pending |
-| 4 | muril_base | ~237M | fp16 | | | | | | | | pending |
-| 5 | banglat5 | 247.6M | fp32 | | | | | | | | pending |
-| 6 | xlm_roberta_base | ~278M | fp16 | | | | | | | | pending |
-| 7 | indicbertv2_mlm | ~278M | fp16 | | | | | | | | pending |
-| 8 | mdeberta_v3_base | ~280M | fp32 | | | | | | | | pending |
-| 9 | mt5_small | ~300M | fp32 | | | | | | | | pending |
-| 10 | byt5_small | ~300M | fp32 | | | | | | | | pending |
-| 11 | banglabert_large | ~335M | fp16 | | | | | | | | pending |
-| 12 | xlm_roberta_large | ~560M | fp16 | | | | | | | | pending |
-| 13 | mt5_base | ~580M | fp32 | | | | | | | | pending (optional) |
+| 1 | banglabert_small | 13.7M | fp16 | 0.0001 | 98.16 ± 0.14 | 98.09 ± 0.13 | 2.5 | 12.6 | 13.0 | 54 MB | done |
+| 2 | banglabert | ~110M |  |  |  |  |  |  |  |  | pending |
+| 3 | bangla_bert_base | ~165M |  |  |  |  |  |  |  |  | pending |
+| 4 | muril_base | ~237M |  |  |  |  |  |  |  |  | pending |
+| 5 | banglat5 | ~250M |  |  |  |  |  |  |  |  | pending |
+| 6 | xlm_roberta_base | ~278M |  |  |  |  |  |  |  |  | pending |
+| 7 | indicbertv2_mlm | ~278M |  |  |  |  |  |  |  |  | pending |
+| 8 | mdeberta_v3_base | ~280M |  |  |  |  |  |  |  |  | pending |
+| 9 | mt5_small | ~300M |  |  |  |  |  |  |  |  | pending |
+| 10 | byt5_small | ~300M |  |  |  |  |  |  |  |  | pending |
+| 11 | banglabert_large | ~335M |  |  |  |  |  |  |  |  | pending |
+| 12 | xlm_roberta_large | ~560M |  |  |  |  |  |  |  |  | pending |
+| 13 | mt5_base | ~580M |  |  |  |  |  |  |  |  | pending |
 
-Disk used by `checkpoints/`: 0 (nothing kept yet).
+Disk used by `checkpoints/`: 54M.
 <!-- /results-table -->
 
 ## Observations for the paper
@@ -36,6 +36,44 @@ Disk used by `checkpoints/`: 0 (nothing kept yet).
   `do_lower_case=False, strip_accents=False`. Anyone using the hub default gets a crippled tokenizer.
 
 ## Entries (newest first)
+
+### 2026-10-18 17:28: banglabert_small (model 1), full cycle
+
+**Run.** `bash scripts/run_model.sh banglabert_small` (config `configs/banglabert_small.yaml`: encoder classifier,
+`@` marker head, normalizer on, fp16, 32 × 1, AdamW wd 0.01, 10% warmup + linear decay, clip 1.0, max len 128,
+≤10 epochs, patience 3). 17:12 -> 17:27 (15 min for the whole cycle).
+
+**lr search (seed 42, dev accuracy).** 3e-5: 97.28 · 5e-5: 98.19 · **1e-4: 98.55** (selected). The best lr is the
+top of the planned grid {3e-5, 5e-5, 1e-4}; a larger lr might be slightly better for this 13.7M model, but the
+grid is kept as planned for comparability.
+
+**Result (lr 1e-4, seeds 42/43/44).** Test accuracy **98.16 ± 0.14** (98.28 / 98.01 / 98.19), macro-F1
+98.09 ± 0.13; 2-reading words 98.4%, 3-reading words (কর, খেল) 83.3%. Dev 98.55 / 98.28 / 98.37; seed 42 kept
+(best dev). Each seed ran all 10 epochs (best epoch 8-9, no early stop), 2.5 min per seed, peak training memory
+0.3 GB. Checkpoint 53.7 MB (fp32 weights).
+
+**Latency (kept checkpoint, 200 sentences, 20 warm-up).**
+
+| device | precision | p50 | p95 | p99 | forward p50 | throughput | paragraph (8 heteronyms) |
+|---|---|---|---|---|---|---|---|
+| T4 GPU | fp16 | 12.6 ms | 15.3 ms | 15.7 ms | 11.2 ms | 569 /s (b8), 1488 /s (b32) | 14.5 ms (1.8 ms/heteronym) |
+| CPU, 4 threads | fp32 | 13.0 ms | 15.6 ms | 16.9 ms | 11.4 ms | 259 /s (b8) | 34.5 ms (4.3 ms/heteronym) |
+| CPU, 1 thread | fp32 | 17.4 ms | 19.4 ms | 20.5 ms | 16.5 ms | - | 80.1 ms (10.0 ms/heteronym) |
+
+Peak GPU memory at inference: 40 MB.
+
+**phoneticize demo** (`runs/banglabert_small/phoneticize_demo.txt`): all 8 heteronyms of the paragraph correct
+(খেল->খ্যালো, পোষ->পোশ্‌, কর->করো, রটে->রোটে, খেলে->খেলে, বসে->বোশে, আঁক->আঁকো, পটল->পট্‌লো), ZWNJ kept; lowest
+confidence on the 3-reading কর (0.66).
+
+**Observations.** At batch 1, the GPU is barely faster than 4 CPU threads for this small model: the time goes into
+Python/HF overhead and launching ~hundreds of small kernels from a 2.3 GHz Xeon, not into compute (forward 11.2 ms
+GPU vs 11.4 ms CPU). The GPU advantage shows up only with batching (1488 vs 259 sentences/s) and in
+`phoneticize`, which batches all heteronyms of a text. Hardest words: আসর and কর (66.7%), কাল and সিম (77.8%).
+
+**Problems.** None (no NaN, no OOM).
+
+**Next.** Wait for review; then banglabert (model 2).
 
 ### 2026-10-18 17:15: Stage 2, smoke test
 

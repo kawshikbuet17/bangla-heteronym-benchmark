@@ -56,7 +56,7 @@ def bench(checkpoint: str, device: str, items: list[Item], paragraph: str, batch
     for size in batches:
         predictor.predict_items(items[:size], batch_size=size)
         totals = [timed(lambda: predictor.predict_items(items, batch_size=size), dev) for _ in range(THROUGHPUT_REPEATS)]
-        throughput[str(size)] = len(items) / (np.median(totals) / 1000)
+        throughput[str(size)] = float(len(items) / (np.median(totals) / 1000))
 
     n_heteronyms = len(predictor.phoneticize_detailed(paragraph)[1])
     for _ in range(3):
