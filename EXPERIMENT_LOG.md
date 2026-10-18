@@ -9,7 +9,7 @@ Latency = batch size 1, full path (normalizer + tokenizer + model + decoding), p
 | # | model | size | precision | best lr | test acc (%) | macro-F1 (%) | train time / seed (min) | GPU p50 (ms) | CPU p50 (ms, 4 thr) | checkpoint | status |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | 1 | banglabert_small | 13.7M | fp16 | 0.0001 | 98.16 ± 0.14 | 98.09 ± 0.13 | 2.5 | 12.6 | 13.0 | 54 MB | done |
-| 2 | banglabert | ~110M |  |  |  |  |  |  |  |  | pending |
+| 2 | banglabert | 110.0M | fp16 | 2e-05 | 99.46 ± 0.16 | 99.40 ± 0.16 | 3.7 | 12.5 | 32.8 | 421 MB | done |
 | 3 | bangla_bert_base | ~165M |  |  |  |  |  |  |  |  | pending |
 | 4 | muril_base | ~237M |  |  |  |  |  |  |  |  | pending |
 | 5 | banglat5 | ~250M |  |  |  |  |  |  |  |  | pending |
@@ -22,7 +22,7 @@ Latency = batch size 1, full path (normalizer + tokenizer + model + decoding), p
 | 12 | xlm_roberta_large | ~560M |  |  |  |  |  |  |  |  | pending |
 | 13 | mt5_base | ~580M |  |  |  |  |  |  |  |  | pending |
 
-Disk used by `checkpoints/`: 54M.
+Disk used by `checkpoints/`: 475M.
 <!-- /results-table -->
 
 ## Observations for the paper
@@ -36,6 +36,40 @@ Disk used by `checkpoints/`: 54M.
   `do_lower_case=False, strip_accents=False`. Anyone using the hub default gets a crippled tokenizer.
 
 ## Entries (newest first)
+
+### 2026-10-18 21:56: banglabert (model 2), full cycle
+
+**Run.** `bash scripts/run_model.sh banglabert` (encoder classifier, normalizer on, fp16, 32 × 1, same recipe as
+model 1). 21:30 -> 21:55 (25 min). From here on the remaining models run back to back from a tmux queue
+(`hetero-queue`, `logs/queue.log`), as agreed.
+
+**lr search (seed 42, dev accuracy).** 1e-5: 98.73 · **2e-5: 99.18** · 3e-5: 98.91 · 5e-5: 99.00.
+
+**Result (lr 2e-5).** Test accuracy **99.46 ± 0.16** (99.28 / 99.55 / 99.55), macro-F1 99.40 ± 0.16;
+2-reading words 99.6%, 3-reading words 87.0%. Dev 99.18 / 99.46 / 99.28; seed 43 kept (best dev). Best epochs
+7 / 5 / 9; seed 43 stopped early after epoch 8. 3.7 min per seed, peak training memory 2.1 GB, checkpoint
+421 MB.
+
+**Latency.**
+
+| device | precision | p50 | p95 | p99 | forward p50 | throughput | paragraph (8 heteronyms) |
+|---|---|---|---|---|---|---|---|
+| T4 GPU | fp16 | 12.5 ms | 13.5 ms | 14.7 ms | 11.8 ms | 539 /s (b8), 1500 /s (b32) | 15.3 ms (1.9 ms/heteronym) |
+| CPU, 4 threads | fp32 | 32.8 ms | 38.5 ms | 40.8 ms | 31.2 ms | 56 /s (b8) | 176.8 ms (22.1 ms/heteronym) |
+| CPU, 1 thread | fp32 | 84.5 ms | 103.4 ms | 119.4 ms | 82.7 ms | - | 599.0 ms (74.9 ms/heteronym) |
+
+Peak GPU memory at inference: 233 MB.
+
+**phoneticize demo.** All 8 heteronyms correct, same output as banglabert_small, higher confidence on কর (0.90).
+
+**Observations.** 8× the parameters of banglabert_small cut the test error from 1.84% to 0.54%. GPU batch-1
+latency is the same as for the small model (12.5 vs 12.6 ms): at batch 1 on the T4 both are bound by per-layer
+launch overhead (both have 12 layers), not compute; on CPU the cost scales with size (32.8 vs 13.0 ms with 4
+threads). Hardest words: কর (74.1%, 3 readings), মজে (83.3%), বেচে and ধমকে (88.9%).
+
+**Problems.** None.
+
+**Next.** bangla_bert_base (queue started 21:55).
 
 ### 2026-10-18 17:28: banglabert_small (model 1), full cycle
 
