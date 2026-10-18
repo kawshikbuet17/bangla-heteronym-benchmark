@@ -1,0 +1,14 @@
+model,tokenizer,zwnj_kept_in_round_trip,zwnj_changes_token_ids,phonetic_sentences_exact_round_trip,unk_tokens_per_sentence,strip_zwnj_for_seq2seq,reference_as_prediction_accuracy,reference_other_word_changes,colliding_candidates
+bangla_bert_base,BertTokenizerFast,False,False,0.0367,0.0001,False,,,
+banglabert,ElectraTokenizerFast,False,False,0.0367,0.0,False,,,
+banglabert_large,ElectraTokenizerFast,False,False,0.0367,0.0,False,,,
+banglabert_small,ElectraTokenizerFast,False,False,0.0367,0.0,False,,,
+banglat5,T5TokenizerFast,False,True,0.6603,0.0,True,1.0,0.0,0.0
+byt5_small,ByT5Tokenizer,True,True,1.0,0.0,False,1.0,0.0,0.0
+indicbertv2_mlm,PreTrainedTokenizerFast,False,True,0.0,0.0,False,,,
+mdeberta_v3_base,DebertaV2TokenizerFast,False,True,0.6603,0.0,False,,,
+mt5_base,T5TokenizerFast,False,True,0.6603,0.0,True,1.0,0.0,0.0
+mt5_small,T5TokenizerFast,False,True,0.6603,0.0,True,1.0,0.0,0.0
+muril_base,BertTokenizerFast,False,False,0.0367,0.0,False,,,
+xlm_roberta_base,XLMRobertaTokenizerFast,False,True,0.6603,0.0,False,,,
+xlm_roberta_large,XLMRobertaTokenizerFast,False,True,0.6603,0.0,False,,,

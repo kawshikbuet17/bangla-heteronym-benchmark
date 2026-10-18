@@ -1,0 +1,17 @@
+model_name: mdeberta_v3_base
+model_id: microsoft/mdeberta-v3-base
+model_type: encoder
+normalize: false
+precision: fp32
+batch_size: 16
+grad_accum: 2
+gradient_checkpointing: false
+lr_grid: [1.0e-5, 2.0e-5, 3.0e-5, 5.0e-5]
+epochs: 10
+patience: 3
+max_length: 128
+warmup_ratio: 0.1
+weight_decay: 0.01
+marker: ["@", "@"]
+head: marker
+dropout: 0.1

@@ -1,0 +1,16 @@
+model_name: banglat5
+model_id: csebuetnlp/banglat5
+model_type: seq2seq
+normalize: true
+precision: fp32
+batch_size: 16
+grad_accum: 1
+gradient_checkpointing: false
+lr_grid: [1.0e-4, 3.0e-4, 5.0e-4]
+epochs: 15
+patience: 3
+max_length: 128
+warmup_ratio: 0.1
+weight_decay: 0.01
+marker: ["@", "@"]
+output: sentence

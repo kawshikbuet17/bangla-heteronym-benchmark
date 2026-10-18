@@ -1,0 +1,17 @@
+model_name: banglabert_large
+model_id: csebuetnlp/banglabert_large
+model_type: encoder
+normalize: true
+precision: fp16
+batch_size: 16
+grad_accum: 2
+gradient_checkpointing: false
+lr_grid: [5.0e-6, 1.0e-5, 2.0e-5]
+epochs: 10
+patience: 3
+max_length: 128
+warmup_ratio: 0.1
+weight_decay: 0.01
+marker: ["@", "@"]
+head: marker
+dropout: 0.1
