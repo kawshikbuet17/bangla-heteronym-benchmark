@@ -6,7 +6,7 @@ Spec: PROMPTS.md. GPU: T4 = `CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=1
 2. [x] Smoke test all 13 models (~20 steps, tiny subset). Fix + log. Commit.
 3. [x] banglabert_small (user OK 2026-10-18: continue through all models, report after each) full cycle -> report, WAIT for user OK.
 4. [ ] Remaining models one by one (one commit each):
-   - [x] banglabert  - [x] bangla-bert-base  - [x] muril  - [ ] banglat5  - [ ] xlm-roberta-base
+   - [x] banglabert  - [x] bangla-bert-base  - [x] muril  - [x] banglat5  - [ ] xlm-roberta-base
    - [ ] IndicBERTv2  - [ ] mdeberta  - [ ] mt5-small  - [ ] byt5-small  - [ ] banglabert_large
    - [ ] xlm-roberta-large  - [ ] mt5-base (optional)
 5. [ ] Candidate scoring: best 3 encoders, main + unseen split, latency. Commit.

@@ -12,7 +12,7 @@ Latency = batch size 1, full path (normalizer + tokenizer + model + decoding), p
 | 2 | banglabert | 110.0M | fp16 | 2e-05 | 99.46 ± 0.16 | 99.40 ± 0.16 | 3.7 | 12.5 | 32.8 | 421 MB | done |
 | 3 | bangla_bert_base | 164.4M | fp16 | 2e-05 | 98.01 ± 0.39 | 97.93 ± 0.41 | 4.4 | 10.6 | 30.5 | 633 MB | done |
 | 4 | muril_base | 237.6M | fp16 | 5e-05 | 95.89 ± 1.04 | 95.54 ± 1.13 | 5.7 | 10.3 | 39.8 | 915 MB | done |
-| 5 | banglat5 | ~250M |  |  |  |  |  |  |  |  | pending |
+| 5 | banglat5 | 247.6M | fp32 | 0.0005 | 98.37 ± 0.18 | 98.37 ± 0.12 | 31.4 | 235.6 | 317.4 | 948 MB | done |
 | 6 | xlm_roberta_base | ~278M |  |  |  |  |  |  |  |  | pending |
 | 7 | indicbertv2_mlm | ~278M |  |  |  |  |  |  |  |  | pending |
 | 8 | mdeberta_v3_base | ~280M |  |  |  |  |  |  |  |  | pending |
@@ -22,7 +22,7 @@ Latency = batch size 1, full path (normalizer + tokenizer + model + decoding), p
 | 12 | xlm_roberta_large | ~560M |  |  |  |  |  |  |  |  | pending |
 | 13 | mt5_base | ~580M |  |  |  |  |  |  |  |  | pending |
 
-Disk used by `checkpoints/`: 2.0G.
+Disk used by `checkpoints/`: 3.0G.
 <!-- /results-table -->
 
 ## Observations for the paper
@@ -36,6 +36,41 @@ Disk used by `checkpoints/`: 2.0G.
   `do_lower_case=False, strip_accents=False`. Anyone using the hub default gets a crippled tokenizer.
 
 ## Entries (newest first)
+
+### 2026-10-19 02:18: banglat5 (model 5), full cycle
+
+**Run.** Queue, `bash scripts/run_model.sh banglat5` (seq2seq, input `phonetic: <sentence with @ target @>`,
+output the full phonetic sentence, greedy decoding, normalizer on, ZWNJ removed model-side (`strip_zwnj`), fp32,
+16 × 1, ≤15 epochs, patience 3 on dev target accuracy). 23:03 -> 02:17 (3 h 14 min).
+
+**lr search (dev).** 1e-4: 97.92 · 3e-4: 98.55 · **5e-4: 98.91** (top of the planned seq2seq grid).
+
+**Result (lr 5e-4).** Test target accuracy **98.37 ± 0.18** (98.55 / 98.19 / 98.37), macro-F1 98.37 ± 0.12;
+2-reading 98.5%, 3-reading 88.9%. Other-word change rate 0.57% on average (0.09 / 1.00 / 0.63%): almost never
+alters words other than the target. Dev 98.91 / 98.28 / 98.55; seed 42 kept. Best epochs 11 / 7 / 7 (stopped
+after 14 / 10 / 10), 28-39 min per seed, peak training memory 4.7 GB, checkpoint 948 MB.
+
+**Latency.** Greedy decoding of the whole sentence, 10.5 generated tokens on average.
+
+| device | precision | p50 | p95 | p99 | forward (generate) p50 | throughput | paragraph (8 heteronyms) |
+|---|---|---|---|---|---|---|---|
+| T4 GPU | fp32 | 235.6 ms | 415.7 ms | 493.4 ms | 233.4 ms | 21 /s (b8), 66 /s (b32) | 536.4 ms (67.0 ms/heteronym) |
+| CPU, 4 threads | fp32 | 317.4 ms | 543.3 ms | 634.1 ms | 316.4 ms | 10 /s (b8) | 1173.5 ms (146.7 ms/heteronym) |
+| CPU, 1 thread | fp32 | 688.1 ms | 1256.1 ms | 1434.7 ms | 731.1 ms | - | 3246.2 ms (405.8 ms/heteronym) |
+
+Peak GPU memory at inference: 1.9 GB.
+
+**phoneticize demo.** All 8 correct, confidences ≥ 0.997.
+
+**Observations.** The seq2seq formulation is competitive (98.37, between banglabert_small and banglabert) and
+needs no candidate list at inference, but it is ~19× slower than the encoders on the T4 at batch 1 (235.6 vs
+~12 ms): each output token is a decoder step, and fp32 is required (T5 NaNs in fp16). The latency is also more
+variable (p95 1.8× p50) because it grows with sentence length. Training a seed costs ~30 min vs ~4 min for a
+base encoder. Hardest words: কর (77.8%), চষে (77.8%), গলে / কাল / ঘটে / চটে (83.3%).
+
+**Problems.** None (no NaN in fp32, no OOM).
+
+**Next.** xlm_roberta_base (started 02:17).
 
 ### 2026-10-18 23:04: muril_base (model 4), full cycle
 

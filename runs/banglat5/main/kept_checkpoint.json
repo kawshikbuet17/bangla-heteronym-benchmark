@@ -1,0 +1,10 @@
+{
+  "seed": 42,
+  "dev_accuracy_by_seed": {
+    "seed42": 0.9891304347826086,
+    "seed43": 0.9827898550724637,
+    "seed44": 0.9855072463768116
+  },
+  "checkpoint": "checkpoints/banglat5",
+  "size_mb": 948.2
+}
