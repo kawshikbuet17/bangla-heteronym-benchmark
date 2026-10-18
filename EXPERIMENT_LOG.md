@@ -10,7 +10,7 @@ Latency = batch size 1, full path (normalizer + tokenizer + model + decoding), p
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | 1 | banglabert_small | 13.7M | fp16 | 0.0001 | 98.16 ± 0.14 | 98.09 ± 0.13 | 2.5 | 12.6 | 13.0 | 54 MB | done |
 | 2 | banglabert | 110.0M | fp16 | 2e-05 | 99.46 ± 0.16 | 99.40 ± 0.16 | 3.7 | 12.5 | 32.8 | 421 MB | done |
-| 3 | bangla_bert_base | ~165M |  |  |  |  |  |  |  |  | pending |
+| 3 | bangla_bert_base | 164.4M | fp16 | 2e-05 | 98.01 ± 0.39 | 97.93 ± 0.41 | 4.4 | 10.6 | 30.5 | 633 MB | done |
 | 4 | muril_base | ~237M |  |  |  |  |  |  |  |  | pending |
 | 5 | banglat5 | ~250M |  |  |  |  |  |  |  |  | pending |
 | 6 | xlm_roberta_base | ~278M |  |  |  |  |  |  |  |  | pending |
@@ -22,7 +22,7 @@ Latency = batch size 1, full path (normalizer + tokenizer + model + decoding), p
 | 12 | xlm_roberta_large | ~560M |  |  |  |  |  |  |  |  | pending |
 | 13 | mt5_base | ~580M |  |  |  |  |  |  |  |  | pending |
 
-Disk used by `checkpoints/`: 475M.
+Disk used by `checkpoints/`: 1.1G.
 <!-- /results-table -->
 
 ## Observations for the paper
@@ -36,6 +36,38 @@ Disk used by `checkpoints/`: 475M.
   `do_lower_case=False, strip_accents=False`. Anyone using the hub default gets a crippled tokenizer.
 
 ## Entries (newest first)
+
+### 2026-10-18 22:25: bangla_bert_base (model 3), full cycle
+
+**Run.** Queue, `bash scripts/run_model.sh bangla_bert_base` (encoder classifier, no normalizer, fp16, 32 × 1,
+tokenizer loaded with `do_lower_case=False, strip_accents=False`, see Observations). 21:55 -> 22:24 (29 min).
+
+**lr search (dev).** 1e-5: 97.64 · **2e-5: 98.01** · 3e-5: 97.74 · 5e-5: 97.64.
+
+**Result (lr 2e-5).** Test accuracy **98.01 ± 0.39** (98.28 / 98.19 / 97.55), macro-F1 97.93 ± 0.41;
+2-reading 98.1%, 3-reading 94.4%. Dev 98.01 / 97.92 / 98.19; seed 44 kept. Best epochs 6 / 8 / 8; 4.4 min per
+seed, peak training memory 3.1 GB, checkpoint 633 MB (102k-token vocab).
+
+**Latency.**
+
+| device | precision | p50 | p95 | p99 | forward p50 | throughput | paragraph (8 heteronyms) |
+|---|---|---|---|---|---|---|---|
+| T4 GPU | fp16 | 10.6 ms | 12.8 ms | 13.9 ms | 9.4 ms | 707 /s (b8), 2068 /s (b32) | 11.5 ms (1.4 ms/heteronym) |
+| CPU, 4 threads | fp32 | 30.5 ms | 36.6 ms | 37.7 ms | 30.1 ms | 59 /s (b8) | 167.2 ms (20.9 ms/heteronym) |
+| CPU, 1 thread | fp32 | 82.8 ms | 99.5 ms | 103.4 ms | 82.1 ms | - | 563.1 ms (70.4 ms/heteronym) |
+
+Peak GPU memory at inference: 337 MB.
+
+**phoneticize demo.** All 8 correct (কর 0.94, others ≥ 0.9998).
+
+**Observations.** Same BERT-base size class as banglabert but 1.45 points lower (98.01 vs 99.46) and with
+3× the seed variance; BanglaBERT's ELECTRA pre-training (and its normalizer) looks clearly better for this task.
+Its errors are spread over 2-reading words (কাল 66.7%, আসলে / চরে / সিম 72.2%) rather than the 3-reading ones.
+Plain BERT is the fastest base-size model on the T4 so far (10.6 ms p50, 2068 /s at batch 32).
+
+**Problems.** None at run time; the lowercasing bug of the hub tokenizer was fixed before training (stage 1).
+
+**Next.** muril_base (started 22:24).
 
 ### 2026-10-18 21:56: banglabert (model 2), full cycle
 

@@ -99,6 +99,7 @@ Full tables: [results/summary.md](results/summary.md), [results/latency.csv](res
 |---|---|---|---|---|---|---|---|---|---|
 | 1 | banglabert_small | 13.7M | fp16 | 0.0001 | 98.16 ± 0.14 | 98.09 ± 0.13 | 2.5 | 12.6 | 13.0 |
 | 2 | banglabert | 110.0M | fp16 | 2e-05 | 99.46 ± 0.16 | 99.40 ± 0.16 | 3.7 | 12.5 | 32.8 |
+| 3 | bangla_bert_base | 164.4M | fp16 | 2e-05 | 98.01 ± 0.39 | 97.93 ± 0.41 | 4.4 | 10.6 | 30.5 |
 <!-- /results-table -->
 
 ## 7. Repo layout

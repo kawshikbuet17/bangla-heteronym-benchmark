@@ -1,0 +1,10 @@
+{
+  "seed": 44,
+  "dev_accuracy_by_seed": {
+    "seed42": 0.980072463768116,
+    "seed43": 0.9791666666666666,
+    "seed44": 0.9818840579710145
+  },
+  "checkpoint": "checkpoints/bangla_bert_base",
+  "size_mb": 633.0
+}
