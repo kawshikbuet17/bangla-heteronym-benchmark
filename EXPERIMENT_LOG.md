@@ -16,7 +16,7 @@ Latency = batch size 1, full path (normalizer + tokenizer + model + decoding), p
 | 6 | xlm_roberta_base | 278.0M | fp16 | 2e-05 | 97.37 ± 0.39 | 97.27 ± 0.36 | 6.5 | 10.3 | 37.5 | 1082 MB | done |
 | 7 | indicbertv2_mlm | 278.0M | fp16 | 5e-05 | 98.34 ± 0.21 | 98.29 ± 0.21 | 6.2 | 11.3 | 31.4 | 1068 MB | done |
 | 8 | mdeberta_v3_base | 278.2M | fp32 | 3e-05 | 97.61 ± 0.14 | 97.48 ± 0.10 | 21.2 | 24.9 | 118.2 | 1081 MB | done |
-| 9 | mt5_small | ~300M |  |  |  |  |  |  |  |  | running |
+| 9 | mt5_small | 300.2M | fp32 | 0.0003 | 93.36 ± 0.21 | 92.99 ± 0.18 | 57.3 | 307.6 | 923.6 | 1165 MB | done |
 | 10 | byt5_small | ~300M |  |  |  |  |  |  |  |  | running |
 | 11 | banglabert_large | ~335M |  |  |  |  |  |  |  |  | pending |
 | 12 | xlm_roberta_large | ~560M |  |  |  |  |  |  |  |  | pending |
@@ -36,6 +36,43 @@ Disk used by `checkpoints/`: 7.2G.
   `do_lower_case=False, strip_accents=False`. Anyone using the hub default gets a crippled tokenizer.
 
 ## Entries (newest first)
+
+### 2026-10-19 12:24: mt5_small (model 9), full cycle
+
+**Run.** Queue, `bash scripts/run_model.sh mt5_small` (seq2seq, full-sentence output, no normalizer, ZWNJ
+removed model-side, fp32, 16 × 1, ≤15 epochs). Retrained from scratch after the 06:57 failure, with the fixed
+confidence code. 07:14 -> 12:23 (5 h 9 min).
+
+**lr search (dev).** 1e-4: 83.70 · **3e-4: 94.11** · 5e-4: 93.57.
+
+**Result (lr 3e-4).** Test target accuracy **93.36 ± 0.21** (93.48 / 93.12 / 93.48), macro-F1 92.99 ± 0.18;
+2-reading 93.5%, 3-reading 85.2%. Other-word change rate 0.03% (0 / 0.09 / 0%). Dev 94.11 / 93.57 / 94.75; seed
+44 kept. Best epochs 15 / 14 / 13, all runs used the full 15 epochs, 57 min per seed, peak training memory
+6.4 GB, checkpoint 1.16 GB.
+
+**Latency.** 18.3 generated tokens on average (vs 10.5 for BanglaT5: mT5's 250k multilingual vocabulary splits
+Bangla into more pieces).
+
+| device | precision | p50 | p95 | p99 | forward (generate) p50 | throughput | paragraph (8 heteronyms) |
+|---|---|---|---|---|---|---|---|
+| T4 GPU | fp32 | 307.6 ms | 617.1 ms | 722.4 ms | 304.7 ms | 14 /s (b8), 42 /s (b32) | 811.9 ms (101.5 ms/heteronym) |
+| CPU, 4 threads | fp32 | 923.6 ms | 1857.6 ms | 2144.3 ms | 923.7 ms | 4 /s (b8) | 2755.3 ms (344.4 ms/heteronym) |
+| CPU, 1 thread | fp32 | 1609.4 ms | 3220.6 ms | 3862.1 ms | 1607.3 ms | - | 8288.9 ms (1036.1 ms/heteronym) |
+
+Peak GPU memory at inference: 1.5 GB.
+
+**phoneticize demo.** 7 of 8 correct: কর -> কোরো (gold করো), confidence 0.99 (a confident error).
+
+**Observations.** Lowest accuracy so far, 5 points below BanglaT5 of the same architecture family and similar
+size: the Bangla-specific T5 (vocabulary and pre-training) matters a lot for seq2seq. All three seeds were still
+improving at the 15-epoch cap (best epochs 13-15), so mT5-small is under-trained under the planned budget; the
+gap to BanglaT5 is partly convergence speed. It almost never changes non-target words (0.03%), so its errors are
+on the target itself. It is also the slowest model so far (GPU 307.6 ms, CPU-4 924 ms), because outputs are
+~1.75× longer in tokens than BanglaT5's. Hardest: আসর (33.3%), কাল (50.0%), দেব (55.6%).
+
+**Problems.** The confidence OOM described in the 07:00 entry (fixed before this run). None in this run.
+
+**Next.** byt5_small (4 × 4, fp32; started 12:23).
 
 ### 2026-10-19 07:00: mt5_small failed at evaluation (OOM in confidence scoring); fixed, queue restarted
 

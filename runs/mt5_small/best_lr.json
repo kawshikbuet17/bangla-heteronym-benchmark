@@ -1,0 +1,18 @@
+{
+  "lr": 0.0003,
+  "criterion": "dev accuracy, then dev macro-F1, then smaller lr",
+  "search": {
+    "0.0001": {
+      "dev_accuracy": 0.8369565217391305,
+      "dev_macro_f1": 0.8219202898550726
+    },
+    "0.0003": {
+      "dev_accuracy": 0.9411231884057971,
+      "dev_macro_f1": 0.9383087474120082
+    },
+    "0.0005": {
+      "dev_accuracy": 0.9356884057971014,
+      "dev_macro_f1": 0.9289013975155279
+    }
+  }
+}

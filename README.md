@@ -105,6 +105,7 @@ Full tables: [results/summary.md](results/summary.md), [results/latency.csv](res
 | 6 | xlm_roberta_base | 278.0M | fp16 | 2e-05 | 97.37 ± 0.39 | 97.27 ± 0.36 | 6.5 | 10.3 | 37.5 |
 | 7 | indicbertv2_mlm | 278.0M | fp16 | 5e-05 | 98.34 ± 0.21 | 98.29 ± 0.21 | 6.2 | 11.3 | 31.4 |
 | 8 | mdeberta_v3_base | 278.2M | fp32 | 3e-05 | 97.61 ± 0.14 | 97.48 ± 0.10 | 21.2 | 24.9 | 118.2 |
+| 9 | mt5_small | 300.2M | fp32 | 0.0003 | 93.36 ± 0.21 | 92.99 ± 0.18 | 57.3 | 307.6 | 923.6 |
 <!-- /results-table -->
 
 ## 7. Repo layout
