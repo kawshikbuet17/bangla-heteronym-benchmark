@@ -12,17 +12,17 @@ Latency = batch size 1, full path (normalizer + tokenizer + model + decoding), p
 | 2 | banglabert | 110.0M | fp16 | 2e-05 | 99.46 ± 0.16 | 99.40 ± 0.16 | 3.7 | 12.5 | 32.8 | 421 MB | done |
 | 3 | bangla_bert_base | 164.4M | fp16 | 2e-05 | 98.01 ± 0.39 | 97.93 ± 0.41 | 4.4 | 10.6 | 30.5 | 633 MB | done |
 | 4 | muril_base | 237.6M | fp16 | 5e-05 | 95.89 ± 1.04 | 95.54 ± 1.13 | 5.7 | 10.3 | 39.8 | 915 MB | done |
-| 5 | banglat5 | 247.6M | fp32 | 0.0005 | 98.37 ± 0.18 | 98.37 ± 0.12 | 31.4 | 235.6 | 317.4 | 948 MB | done |
+| 5 | banglat5 | 247.6M | fp32 | 0.0005 | 98.37 ± 0.18 | 98.37 ± 0.12 | 31.4 | 236.8 | 323.3 | 948 MB | done |
 | 6 | xlm_roberta_base | 278.0M | fp16 | 2e-05 | 97.37 ± 0.39 | 97.27 ± 0.36 | 6.5 | 10.3 | 37.5 | 1082 MB | done |
 | 7 | indicbertv2_mlm | 278.0M | fp16 | 5e-05 | 98.34 ± 0.21 | 98.29 ± 0.21 | 6.2 | 11.3 | 31.4 | 1068 MB | done |
 | 8 | mdeberta_v3_base | 278.2M | fp32 | 3e-05 | 97.61 ± 0.14 | 97.48 ± 0.10 | 21.2 | 24.9 | 118.2 | 1081 MB | done |
-| 9 | mt5_small | ~300M |  |  |  |  |  |  |  |  | pending |
-| 10 | byt5_small | ~300M |  |  |  |  |  |  |  |  | pending |
+| 9 | mt5_small | ~300M |  |  |  |  |  |  |  |  | running |
+| 10 | byt5_small | ~300M |  |  |  |  |  |  |  |  | running |
 | 11 | banglabert_large | ~335M |  |  |  |  |  |  |  |  | pending |
 | 12 | xlm_roberta_large | ~560M |  |  |  |  |  |  |  |  | pending |
 | 13 | mt5_base | ~580M |  |  |  |  |  |  |  |  | pending |
 
-Disk used by `checkpoints/`: 6.1G.
+Disk used by `checkpoints/`: 7.2G.
 <!-- /results-table -->
 
 ## Observations for the paper
@@ -176,20 +176,22 @@ output the full phonetic sentence, greedy decoding, normalizer on, ZWNJ removed 
 alters words other than the target. Dev 98.91 / 98.28 / 98.55; seed 42 kept. Best epochs 11 / 7 / 7 (stopped
 after 14 / 10 / 10), 28-39 min per seed, peak training memory 4.7 GB, checkpoint 948 MB.
 
-**Latency.** Greedy decoding of the whole sentence, 10.5 generated tokens on average.
+**Latency.** Greedy decoding of the whole sentence, 10.5 generated tokens on average. Re-measured on
+2026-10-19 07:14 with the fixed confidence code (see the mt5_small entry); the first measurement was within noise
+of these numbers (GPU p50 235.6 vs 236.8 ms, CPU-4 317.4 vs 323.3 ms) but used 1.9 GB peak GPU memory.
 
 | device | precision | p50 | p95 | p99 | forward (generate) p50 | throughput | paragraph (8 heteronyms) |
 |---|---|---|---|---|---|---|---|
-| T4 GPU | fp32 | 235.6 ms | 415.7 ms | 493.4 ms | 233.4 ms | 21 /s (b8), 66 /s (b32) | 536.4 ms (67.0 ms/heteronym) |
-| CPU, 4 threads | fp32 | 317.4 ms | 543.3 ms | 634.1 ms | 316.4 ms | 10 /s (b8) | 1173.5 ms (146.7 ms/heteronym) |
-| CPU, 1 thread | fp32 | 688.1 ms | 1256.1 ms | 1434.7 ms | 731.1 ms | - | 3246.2 ms (405.8 ms/heteronym) |
+| T4 GPU | fp32 | 236.8 ms | 410.6 ms | 481.1 ms | 235.5 ms | 21 /s (b8), 67 /s (b32) | 532.1 ms (66.5 ms/heteronym) |
+| CPU, 4 threads | fp32 | 323.3 ms | 555.1 ms | 645.1 ms | 320.5 ms | 9 /s (b8) | 1261.8 ms (157.7 ms/heteronym) |
+| CPU, 1 thread | fp32 | 745.9 ms | 1286.5 ms | 1488.5 ms | 744.2 ms | - | 3242.8 ms (405.4 ms/heteronym) |
 
-Peak GPU memory at inference: 1.9 GB.
+Peak GPU memory at inference: 1.2 GB.
 
 **phoneticize demo.** All 8 correct, confidences ≥ 0.997.
 
 **Observations.** The seq2seq formulation is competitive (98.37, between banglabert_small and banglabert) and
-needs no candidate list at inference, but it is ~19× slower than the encoders on the T4 at batch 1 (235.6 vs
+needs no candidate list at inference, but it is ~20× slower than the encoders on the T4 at batch 1 (236.8 vs
 ~12 ms): each output token is a decoder step, and fp32 is required (T5 NaNs in fp16). The latency is also more
 variable (p95 1.8× p50) because it grows with sentence length. Training a seed costs ~30 min vs ~4 min for a
 base encoder. Hardest words: কর (77.8%), চষে (77.8%), গলে / কাল / ঘটে / চটে (83.3%).

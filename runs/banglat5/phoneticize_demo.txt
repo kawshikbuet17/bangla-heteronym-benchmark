@@ -12,4 +12,4 @@ word	position	prediction	confidence
 আঁক	295	আঁকো	1.0000
 পটল	329	পট্‌লো	0.9990
 
-8 heteronyms, 671.1 ms on cuda (checkpoints/banglat5)
+8 heteronyms, 520.7 ms on cuda (checkpoints/banglat5)
