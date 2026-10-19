@@ -16,4 +16,4 @@ Spec: PROMPTS.md. GPU: T4 = `CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=1
 9. [ ] Final aggregation + summary table. Commit.
    Note: xlm_roberta_large + mt5_base need triton containers on T4 stopped (user allowed); restart after.
    Queue: tmux session hetero-queue (script in session scratchpad), log logs/queue.log; per model: log entry + commit.
-   Order change (user, 2026-10-19 15:45): byt5_small after banglabert_large, xlm_roberta_large, mt5_base (its lr1e-4 run kept).
+   Order change (user, 2026-10-19 15:47): byt5_small stopped, runs after banglabert_large, xlm_roberta_large, mt5_base.

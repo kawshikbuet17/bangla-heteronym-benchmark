@@ -41,10 +41,10 @@ Disk used by `checkpoints/`: 7.2G.
 
 ByT5 is slow on the T4: ~25 min per epoch (~18 min training at 4 × 4 on byte-level sequences of ~300 bytes,
 ~7 min of greedy dev generation), so its cycle (3 lr-search runs + 2 seeds, ≤15 epochs each) takes ~20-30 h.
-At the owner's request it runs after the remaining models instead of in table order: its running lr-search run
-(lr 1e-4; dev 91.5% at epoch 7 of 15, still improving) is allowed to finish, then the queue runs
-banglabert_large, xlm_roberta_large and mt5_base, and finally the 4 remaining ByT5 runs (the finished run is
-skipped on resume). No work is lost and results are unaffected.
+At the owner's request it runs after the remaining models instead of in table order. Its running lr-search run
+(lr 1e-4; dev 91.5% at epoch 7 of 15, still improving) was stopped at 15:47 and will be retrained from scratch
+(runs are not resumable mid-training); the queue now runs banglabert_large, xlm_roberta_large, mt5_base, then
+the full byt5_small cycle. Results are unaffected; ~3.3 h of GPU time was discarded.
 
 ### 2026-10-19 12:24: mt5_small (model 9), full cycle
 
