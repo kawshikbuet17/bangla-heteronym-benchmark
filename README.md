@@ -49,8 +49,11 @@ Full cycle for one model (lr search, 3 seeds, keep best checkpoint, latency, dem
 best inside tmux; logs go to `logs/{model}.log`:
 
 ```bash
-bash scripts/run_model.sh banglabert_small
+bash scripts/run_model.sh banglabert_small            # or: ... banglabert_small train | measure
 ```
+
+`train` runs the lr search, the 3 seeds and keeps the best checkpoint; `measure` runs the latency benchmark,
+the phoneticize demo, the requirements file and the aggregation (the default runs both).
 
 Single steps (run from the repo root inside the env, with the T4 pinned: `source scripts/env.sh`):
 

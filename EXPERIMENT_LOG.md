@@ -37,6 +37,19 @@ Disk used by `checkpoints/`: 7.2G.
 
 ## Entries (newest first)
 
+### 2026-10-19 15:55: triton containers stopped while training the remaining models
+
+With the owner's permission, the two triton containers on the T4 (`fast_whisper_triton_test`,
+`dialect_translation_triton`) are now stopped while the remaining models train, and started again (and allowed
+to become healthy and idle) before each latency measurement, so the latency conditions match models 1-9
+(containers loaded but idle). `scripts/run_model.sh` gained a phase argument for this (`train` = lr search,
+seeds, keep best; `measure` = latency, demo, requirements, aggregation). The queue was restarted at 15:55;
+banglabert_large's first lr-search run (started 15:47) was restarted from scratch.
+
+byt5_small goes back to the planned 8 × 2 (it only fell back to 4 × 4 because of the containers' memory);
+the OOM fallback still covers a shared GPU. Training-time numbers (memory, minutes per seed) of the remaining
+models are therefore measured on a T4 with no other processes; accuracy is unaffected.
+
 ### 2026-10-19 15:45: byt5_small moved to the end of the queue (change from the plan's order)
 
 ByT5 is slow on the T4: ~25 min per epoch (~18 min training at 4 × 4 on byte-level sequences of ~300 bytes,
