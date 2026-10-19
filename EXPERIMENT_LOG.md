@@ -37,6 +37,15 @@ Disk used by `checkpoints/`: 7.2G.
 
 ## Entries (newest first)
 
+### 2026-10-19 16:19: training paused for office hours, resumes 17:15
+
+At the owner's request the queue was paused at 16:18 and the two triton containers were started again
+(healthy at 16:19) so the services are available until the end of office hours. banglabert_large's lr 5e-6
+run had finished (dev 99.37%, kept); the lr 1e-5 run (8 min in) was stopped and will be retrained (stopping
+rather than freezing the process keeps the recorded training times correct). At 17:15 a scheduled job
+(`hetero-resume`) restarts the queue, which stops the containers while training and starts them again for each
+latency measurement and when the queue finishes.
+
 ### 2026-10-19 15:55: triton containers stopped while training the remaining models
 
 With the owner's permission, the two triton containers on the T4 (`fast_whisper_triton_test`,

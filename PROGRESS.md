@@ -18,3 +18,4 @@ Spec: PROMPTS.md. GPU: T4 = `CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=1
    Queue: tmux session hetero-queue (script in session scratchpad), log logs/queue.log; per model: log entry + commit.
    Order change (user, 2026-10-19 15:47): byt5_small stopped, runs after banglabert_large, xlm_roberta_large, mt5_base.
    2026-10-19 15:55: queue2 (scratchpad/queue2.sh): triton containers stopped while training, started for each 'measure' phase.
+   2026-10-19 16:18: paused for office hours (services back up); hetero-resume restarts queue2 at 17:15.
