@@ -1,0 +1,10 @@
+{
+  "seed": 44,
+  "dev_accuracy_by_seed": {
+    "seed42": 0.9945652173913043,
+    "seed43": 0.9936594202898551,
+    "seed44": 0.9954710144927537
+  },
+  "checkpoint": "checkpoints/banglabert_large",
+  "size_mb": 1281.8
+}

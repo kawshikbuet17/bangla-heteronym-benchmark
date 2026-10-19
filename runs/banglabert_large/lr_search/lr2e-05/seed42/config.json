@@ -1,0 +1,59 @@
+{
+  "split": "main",
+  "train_file": "train",
+  "output": null,
+  "model_name": "banglabert_large",
+  "model_id": "csebuetnlp/banglabert_large",
+  "model_type": "encoder",
+  "normalize": true,
+  "precision": "fp16",
+  "batch_size": 16,
+  "grad_accum": 2,
+  "gradient_checkpointing": false,
+  "lr_grid": [
+    5e-06,
+    1e-05,
+    2e-05
+  ],
+  "epochs": 10,
+  "patience": 3,
+  "max_length": 128,
+  "warmup_ratio": 0.1,
+  "weight_decay": 0.01,
+  "marker": [
+    "@",
+    "@"
+  ],
+  "head": "marker",
+  "dropout": 0.1,
+  "setting": "main",
+  "seed": 42,
+  "lr": 2e-05,
+  "adjustments": [],
+  "environment": {
+    "dataset": "kawshikbuet17/bangla-heteronyms",
+    "dataset_revision": "2c3d86b67571e15ba3520d3d7b11930fb8f34e3a",
+    "git_commit": "6d2cadfdd4911857924799107411e0b735c43a07",
+    "git_dirty": false,
+    "python": "3.11.17",
+    "packages": {
+      "torch": "2.7.1+cu126",
+      "transformers": "4.57.6",
+      "tokenizers": "0.22.2",
+      "accelerate": "1.15.0",
+      "datasets": "5.0.1",
+      "safetensors": "0.8.0",
+      "sentencepiece": "0.2.2",
+      "protobuf": "7.36.2",
+      "normalizer": "0.0.1",
+      "numpy": "2.4.6",
+      "pandas": "3.0.6",
+      "scikit-learn": "1.9.1"
+    },
+    "torch_cuda": "12.6",
+    "cpu": "Intel(R) Xeon(R) CPU E5-2650 v3 @ 2.30GHz",
+    "cuda_visible_devices": "1",
+    "gpu": "Tesla T4",
+    "driver": "560.35.05"
+  }
+}

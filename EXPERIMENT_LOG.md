@@ -18,11 +18,11 @@ Latency = batch size 1, full path (normalizer + tokenizer + model + decoding), p
 | 8 | mdeberta_v3_base | 278.2M | fp32 | 3e-05 | 97.61 ± 0.14 | 97.48 ± 0.10 | 21.2 | 24.9 | 118.2 | 1081 MB | done |
 | 9 | mt5_small | 300.2M | fp32 | 0.0003 | 93.36 ± 0.21 | 92.99 ± 0.18 | 57.3 | 307.6 | 923.6 | 1165 MB | done |
 | 10 | byt5_small | ~300M |  |  |  |  |  |  |  |  | running |
-| 11 | banglabert_large | ~335M |  |  |  |  |  |  |  |  | pending |
+| 11 | banglabert_large | 335.6M | fp16 | 2e-05 | 99.18 ± 0.16 | 99.14 ± 0.16 | 11.7 | 22.8 | 107.8 | 1282 MB | done |
 | 12 | xlm_roberta_large | ~560M |  |  |  |  |  |  |  |  | pending |
 | 13 | mt5_base | ~580M |  |  |  |  |  |  |  |  | pending |
 
-Disk used by `checkpoints/`: 7.2G.
+Disk used by `checkpoints/`: 8.5G.
 <!-- /results-table -->
 
 ## Observations for the paper
@@ -36,6 +36,40 @@ Disk used by `checkpoints/`: 7.2G.
   `do_lower_case=False, strip_accents=False`. Anyone using the hub default gets a crippled tokenizer.
 
 ## Entries (newest first)
+
+### 2026-10-19 18:12: banglabert_large (model 11), full cycle
+
+**Run.** Queue (`run_model.sh banglabert_large train`, then `measure`; encoder classifier, normalizer on, fp16,
+16 × 2). Training on the T4 with the triton containers stopped: 15:55-16:18 (lr 5e-6 run), paused for office
+hours, 17:15-18:05; latency with the containers running idle, 18:06-18:11.
+
+**lr search (dev).** 5e-6: 99.37 · 1e-5: 99.46 · **2e-5: 99.46** (tie on accuracy; 2e-5 wins on dev macro-F1).
+
+**Result (lr 2e-5).** Test accuracy **99.18 ± 0.16** (99.09 / 99.09 / 99.37), macro-F1 99.14 ± 0.16;
+2-reading 99.3%, 3-reading 92.6%. Dev 99.46 / 99.37 / 99.55; seed 44 kept. Best epochs 4 / 5 / 8 (early stop after
+7 / 8 / 10), 10-14 min per seed, peak training memory 6.4 GB, checkpoint 1.28 GB.
+
+**Latency.**
+
+| device | precision | p50 | p95 | p99 | forward p50 | throughput | paragraph (8 heteronyms) |
+|---|---|---|---|---|---|---|---|
+| T4 GPU | fp16 | 22.8 ms | 26.0 ms | 28.6 ms | 21.9 ms | 309 /s (b8), 820 /s (b32) | 25.8 ms (3.2 ms/heteronym) |
+| CPU, 4 threads | fp32 | 107.8 ms | 134.7 ms | 155.2 ms | 99.9 ms | 16 /s (b8) | 626.1 ms (78.3 ms/heteronym) |
+| CPU, 1 thread | fp32 | 301.8 ms | 362.6 ms | 391.6 ms | 301.0 ms | - | 2089.4 ms (261.2 ms/heteronym) |
+
+Peak GPU memory at inference: 668 MB.
+
+**phoneticize demo.** All 8 correct, confidences ≥ 0.9985.
+
+**Observations.** 3× the parameters of BanglaBERT base and no accuracy gain (99.18 ± 0.16 vs 99.46 ± 0.16;
+within ~2 std, ~3 more errors per 1,104 sentences), at 1.8× the GPU and 3.3× the CPU latency: on this dataset
+BanglaBERT base is the better trade-off; with 14 training sentences per pronunciation the large model may be
+data-limited. GPU batch-1 latency now reflects depth (24 layers: 22.8 ms vs ~12 ms for 12 layers). Hardest:
+ব্যাংককে and বেচে (83.3%), কর (85.2%).
+
+**Problems.** None (the office-hours pause only cost the restarted lr 1e-5 run).
+
+**Next.** xlm_roberta_large (started 18:11, containers stopped).
 
 ### 2026-10-19 16:19: training paused for office hours, resumes 17:15
 
