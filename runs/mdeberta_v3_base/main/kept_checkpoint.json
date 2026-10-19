@@ -1,0 +1,10 @@
+{
+  "seed": 42,
+  "dev_accuracy_by_seed": {
+    "seed42": 0.9873188405797102,
+    "seed43": 0.9818840579710145,
+    "seed44": 0.9846014492753623
+  },
+  "checkpoint": "checkpoints/mdeberta_v3_base",
+  "size_mb": 1081.1
+}

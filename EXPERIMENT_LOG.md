@@ -15,14 +15,14 @@ Latency = batch size 1, full path (normalizer + tokenizer + model + decoding), p
 | 5 | banglat5 | 247.6M | fp32 | 0.0005 | 98.37 ± 0.18 | 98.37 ± 0.12 | 31.4 | 235.6 | 317.4 | 948 MB | done |
 | 6 | xlm_roberta_base | 278.0M | fp16 | 2e-05 | 97.37 ± 0.39 | 97.27 ± 0.36 | 6.5 | 10.3 | 37.5 | 1082 MB | done |
 | 7 | indicbertv2_mlm | 278.0M | fp16 | 5e-05 | 98.34 ± 0.21 | 98.29 ± 0.21 | 6.2 | 11.3 | 31.4 | 1068 MB | done |
-| 8 | mdeberta_v3_base | ~280M |  |  |  |  |  |  |  |  | pending |
+| 8 | mdeberta_v3_base | 278.2M | fp32 | 3e-05 | 97.61 ± 0.14 | 97.48 ± 0.10 | 21.2 | 24.9 | 118.2 | 1081 MB | done |
 | 9 | mt5_small | ~300M |  |  |  |  |  |  |  |  | pending |
 | 10 | byt5_small | ~300M |  |  |  |  |  |  |  |  | pending |
 | 11 | banglabert_large | ~335M |  |  |  |  |  |  |  |  | pending |
 | 12 | xlm_roberta_large | ~560M |  |  |  |  |  |  |  |  | pending |
 | 13 | mt5_base | ~580M |  |  |  |  |  |  |  |  | pending |
 
-Disk used by `checkpoints/`: 5.1G.
+Disk used by `checkpoints/`: 6.1G.
 <!-- /results-table -->
 
 ## Observations for the paper
@@ -36,6 +36,42 @@ Disk used by `checkpoints/`: 5.1G.
   `do_lower_case=False, strip_accents=False`. Anyone using the hub default gets a crippled tokenizer.
 
 ## Entries (newest first)
+
+### 2026-10-19 06:01: mdeberta_v3_base (model 8), full cycle
+
+**Run.** Queue, `bash scripts/run_model.sh mdeberta_v3_base` (encoder classifier, no normalizer, **fp32** as
+planned (mDeBERTa gives NaN losses in fp16), 16 × 2). 03:44 -> 06:00 (2 h 17 min).
+
+**lr search (dev).** 1e-5: 97.83 · 2e-5: 98.55 · **3e-5: 98.73** · 5e-5: 98.73 (tie on accuracy; 3e-5 wins on
+dev macro-F1).
+
+**Result (lr 3e-5).** Test accuracy **97.61 ± 0.14** (97.46 / 97.64 / 97.74), macro-F1 97.48 ± 0.10;
+2-reading 97.8%, 3-reading 87.0%. Dev 98.73 / 98.19 / 98.46; seed 42 kept. Best epochs 6 / 8 / 10, 21 min per
+seed (5× a fp16 base encoder), peak training memory 6.0 GB, checkpoint 1.08 GB.
+
+**Latency.**
+
+| device | precision | p50 | p95 | p99 | forward p50 | throughput | paragraph (8 heteronyms) |
+|---|---|---|---|---|---|---|---|
+| T4 GPU | fp32 | 24.9 ms | 31.0 ms | 31.6 ms | 24.1 ms | 220 /s (b8), 235 /s (b32) | 41.0 ms (5.1 ms/heteronym) |
+| CPU, 4 threads | fp32 | 118.2 ms | 137.1 ms | 177.8 ms | 112.9 ms | 23 /s (b8) | 455.2 ms (56.9 ms/heteronym) |
+| CPU, 1 thread | fp32 | 316.5 ms | 380.3 ms | 404.3 ms | 315.5 ms | - | 1327.6 ms (166.0 ms/heteronym) |
+
+Peak GPU memory at inference: 1.3 GB.
+
+**phoneticize demo.** 7 of 8 correct: the first demo error of any model, কর -> কোরো (gold করো) with
+confidence 0.56 (the 3-reading word).
+
+**Observations.** The cost of fp32 on the T4 is clear here: 2.4× the GPU batch-1 latency of the fp16 base
+encoders (24.9 vs ~10-12 ms) and ~8× lower batch-32 throughput (235 vs ~1,900 /s): batching barely helps
+because fp32 on Turing has no tensor-core path and is compute-bound already at batch 8. On CPU (all fp32) it is
+also the slowest base encoder (118 ms, 4 threads), from DeBERTa's disentangled attention. Accuracy is mid-pack
+for the multilingual models (above XLM-R base and MuRIL, below IndicBERTv2), with the lowest seed variance so far
+(±0.14). Hardest: সিম (66.7%), বার / মজে (72.2%), কর (74.1%).
+
+**Problems.** None (fp32 as planned; no OOM).
+
+**Next.** mt5_small (seq2seq, fp32; started 06:00).
 
 ### 2026-10-19 03:44: indicbertv2_mlm (model 7), full cycle
 

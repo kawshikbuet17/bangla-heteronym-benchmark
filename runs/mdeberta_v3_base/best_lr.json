@@ -1,0 +1,22 @@
+{
+  "lr": 3e-05,
+  "criterion": "dev accuracy, then dev macro-F1, then smaller lr",
+  "search": {
+    "1e-05": {
+      "dev_accuracy": 0.9782608695652174,
+      "dev_macro_f1": 0.9775168219461697
+    },
+    "2e-05": {
+      "dev_accuracy": 0.9855072463768116,
+      "dev_macro_f1": 0.9849702380952381
+    },
+    "3e-05": {
+      "dev_accuracy": 0.9873188405797102,
+      "dev_macro_f1": 0.987008281573499
+    },
+    "5e-05": {
+      "dev_accuracy": 0.9873188405797102,
+      "dev_macro_f1": 0.9868335921325052
+    }
+  }
+}
