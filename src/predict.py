@@ -7,7 +7,7 @@ from pathlib import Path
 
 import torch
 from torch import nn
-from transformers import PreTrainedTokenizerBase
+from transformers import LogitsProcessor, LogitsProcessorList, PreTrainedTokenizerBase
 
 from src.data import find_occurrences, piece_index, split_pieces, strip_punct, token_index, word_pattern
 from src.models import (
@@ -25,6 +25,19 @@ class Prediction:
     aligned: bool = True
     output: str = ""
     generated_tokens: int = 0
+
+
+class GreedyLogProbs(LogitsProcessor):
+    """Records the log-probability of each greedy choice (max logit - logsumexp) while generating. Keeping all
+    scores (output_scores) instead needs steps x batch x vocab floats: ~2.4 GB for mT5's 250k vocab at batch 64."""
+
+    def __init__(self):
+        self.steps: list[torch.Tensor] = []
+
+    def __call__(self, input_ids: torch.Tensor, scores: torch.Tensor) -> torch.Tensor:
+        scores32 = scores.float()
+        self.steps.append(scores32.max(-1).values - scores32.logsumexp(-1))
+        return scores
 
 
 def roundtrip(tokenizer: PreTrainedTokenizerBase, text: str) -> str:
@@ -80,20 +93,20 @@ class Predictor:
     def forward(self, batch: dict[str, torch.Tensor]):
         with torch.inference_mode():
             if self.kind == "seq2seq":
-                return self.model.generate(**batch, max_new_tokens=self.hconfig["max_length"], num_beams=1, do_sample=False,
-                                           output_scores=True, return_dict_in_generate=True)
+                recorder = GreedyLogProbs()
+                sequences = self.model.generate(**batch, max_new_tokens=self.hconfig["max_length"], num_beams=1, do_sample=False,
+                                                logits_processor=LogitsProcessorList([recorder]))
+                return sequences, torch.stack(recorder.steps, 1)
             return self.model(**batch)["logits"]
 
     def decode(self, items: list[Item], outputs) -> list[Prediction]:
         if self.kind != "seq2seq":
             confidence, index = outputs.float().softmax(-1).max(-1)
             return [Prediction(self.candidates[w][i], c) for (*_, w), i, c in zip(items, index.tolist(), confidence.tolist())]
-        with torch.inference_mode():
-            scores = self.model.compute_transition_scores(outputs.sequences, outputs.scores, normalize_logits=True).float()
-        generated = outputs.sequences[:, -scores.size(1):]
-        mask = (generated != self.tokenizer.pad_token_id).float()
-        mean_logprob = (scores.nan_to_num(0) * mask).sum(1) / mask.sum(1).clamp(min=1)
-        texts = self.tokenizer.batch_decode(outputs.sequences, skip_special_tokens=True)
+        sequences, logprobs = outputs
+        mask = (sequences[:, -logprobs.size(1):] != self.tokenizer.pad_token_id).float()
+        mean_logprob = (logprobs * mask).sum(1) / mask.sum(1).clamp(min=1)
+        texts = self.tokenizer.batch_decode(sequences, skip_special_tokens=True)
         predictions = []
         for text, item, lp, n in zip(texts, items, mean_logprob.tolist(), mask.sum(1).tolist()):
             prediction = self.from_output(text, item)

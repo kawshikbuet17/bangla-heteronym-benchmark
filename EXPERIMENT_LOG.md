@@ -37,6 +37,30 @@ Disk used by `checkpoints/`: 6.1G.
 
 ## Entries (newest first)
 
+### 2026-10-19 07:00: mt5_small failed at evaluation (OOM in confidence scoring); fixed, queue restarted
+
+**What happened.** The first mt5_small lr-search run (lr 1e-4) trained all 15 epochs (06:00-06:57, best dev
+83.7%), then failed in the post-training dev evaluation: `torch.OutOfMemoryError` in
+`compute_transition_scores` (`src/predict.py`). Seq2seq confidence was computed from `generate(...,
+output_scores=True)`, which keeps steps × batch × vocab logits and then log-softmaxes them all at once: harmless
+for BanglaT5 (32k vocab) but ~2.4 GB per batch of 64 for mT5's 250k vocab, on top of ~8.4 GB in use. The queue
+then started byt5_small; it was stopped after a few minutes so that models keep the table order.
+
+**Fix.** `GreedyLogProbs`, a small logits processor that records each greedy step's log-probability
+(max logit − logsumexp) during generation; no full-vocabulary scores are kept. Same confidence by definition
+(geometric-mean token probability). Verified: re-scoring the kept banglat5 checkpoint gives identical predictions
+and accuracy (98.55%) and confidences equal to the stored ones within 1e-6; the leftover mt5_small checkpoint
+now evaluates dev at batch 64 with a 1.5 GB peak (83.70%). The "incorrect regex pattern" warning that transformers
+prints when loading the saved mT5 tokenizer is a false alarm: identical token ids to `google/mt5-small` on all
+8,464 dataset texts.
+
+**Consequences.** banglat5's latency was measured with the heavier `output_scores` path, so its latency
+benchmark and demo are re-run with the fixed code (first item of the restarted queue) to keep all models
+comparable; its accuracy numbers are unchanged. The failed mt5_small run is retrained from scratch (no train
+statistics were saved for it).
+
+**Next.** Queue: banglat5 latency re-run, mt5_small, byt5_small, banglabert_large, xlm_roberta_large, mt5_base.
+
 ### 2026-10-19 06:01: mdeberta_v3_base (model 8), full cycle
 
 **Run.** Queue, `bash scripts/run_model.sh mdeberta_v3_base` (encoder classifier, no normalizer, **fp32** as
