@@ -8,7 +8,7 @@ Spec: PROMPTS.md. GPU: T4 = `CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=1
 4. [ ] Remaining models one by one (one commit each):
    - [x] banglabert  - [x] bangla-bert-base  - [x] muril  - [x] banglat5  - [x] xlm-roberta-base
    - [x] IndicBERTv2  - [x] mdeberta  - [x] mt5-small  - [ ] byt5-small  - [x] banglabert_large
-   - [ ] xlm-roberta-large  - [ ] mt5-base (optional)
+   - [x] xlm-roberta-large  - [ ] mt5-base (optional)
 5. [ ] Candidate scoring: best 3 encoders, main + unseen split, latency. Commit.
 6. [ ] Unseen-word split: seq2seq x 3 seeds. Commit.
 7. [ ] Learning curve 2/5/10/14: best 3 encoders + best seq2seq x 3 seeds. Commit.

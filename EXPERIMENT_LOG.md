@@ -19,10 +19,10 @@ Latency = batch size 1, full path (normalizer + tokenizer + model + decoding), p
 | 9 | mt5_small | 300.2M | fp32 | 0.0003 | 93.36 ± 0.21 | 92.99 ± 0.18 | 57.3 | 307.6 | 923.6 | 1165 MB | done |
 | 10 | byt5_small | ~300M |  |  |  |  |  |  |  |  | running |
 | 11 | banglabert_large | 335.6M | fp16 | 2e-05 | 99.18 ± 0.16 | 99.14 ± 0.16 | 11.7 | 22.8 | 107.8 | 1282 MB | done |
-| 12 | xlm_roberta_large | ~560M |  |  |  |  |  |  |  |  | pending |
+| 12 | xlm_roberta_large | 559.9M | fp16 | 2e-05 | 98.43 ± 0.19 | 98.34 ± 0.14 | 23.5 | 17.8 | 126.4 | 2157 MB | done |
 | 13 | mt5_base | ~580M |  |  |  |  |  |  |  |  | pending |
 
-Disk used by `checkpoints/`: 8.5G.
+Disk used by `checkpoints/`: 11G.
 <!-- /results-table -->
 
 ## Observations for the paper
@@ -36,6 +36,40 @@ Disk used by `checkpoints/`: 8.5G.
   `do_lower_case=False, strip_accents=False`. Anyone using the hub default gets a crippled tokenizer.
 
 ## Entries (newest first)
+
+### 2026-10-19 20:22: xlm_roberta_large (model 12), full cycle
+
+**Run.** Queue (`train` 18:11-20:14 with the triton containers stopped; `measure` 20:14-20:21 with them running
+idle). Encoder classifier, no normalizer, fp16, 8 × 4 (planned setting; needs the full T4).
+
+**lr search (dev).** 5e-6: 98.10 · 1e-5: 98.46 · **2e-5: 98.82** (top of the planned large grid).
+
+**Result (lr 2e-5).** Test accuracy **98.43 ± 0.19** (98.28 / 98.37 / 98.64), macro-F1 98.34 ± 0.14;
+2-reading 98.5%, 3-reading 94.4%. Dev 98.82 / 98.91 / 98.73; seed 43 kept. Best epochs 9 / 10 / 6, 22-24 min per
+seed, peak training memory **10.7 GB** (would not fit next to the containers), checkpoint 2.16 GB.
+
+**Latency.**
+
+| device | precision | p50 | p95 | p99 | forward p50 | throughput | paragraph (8 heteronyms) |
+|---|---|---|---|---|---|---|---|
+| T4 GPU | fp16 | 17.8 ms | 19.1 ms | 21.5 ms | 17.2 ms | 404 /s (b8), 668 /s (b32) | 20.3 ms (2.5 ms/heteronym) |
+| CPU, 4 threads | fp32 | 126.4 ms | 155.5 ms | 179.4 ms | 135.9 ms | 11 /s (b8) | 959.8 ms (120.0 ms/heteronym) |
+| CPU, 1 thread | fp32 | 380.8 ms | 501.8 ms | 580.9 ms | 378.1 ms | - | 3317.9 ms (414.7 ms/heteronym) |
+
+Peak GPU memory at inference: 1.1 GB.
+
+**phoneticize demo.** All 8 correct, confidences ≥ 0.998.
+
+**Observations.** Best multilingual model (98.43, above IndicBERTv2's 98.34 by a margin inside one std) and
++1.06 over XLM-R base, but still 1.03 below the 110M Bangla-only BanglaBERT at 5× its parameters, 1.4× its GPU
+and ~4× its CPU latency. The best lr is again the top of the planned grid. Hardest: আসর (61.1%), কাল (77.8%).
+
+**Containers.** Stopped 18:11:36-20:14:50 for training (2 h 3 min), running for the latency measurement,
+stopped again 20:21:31 for mt5_base.
+
+**Problems.** None.
+
+**Next.** mt5_base (seq2seq, fp32, 8 × 2; started 20:21, up to ~9 h).
 
 ### 2026-10-19 18:12: banglabert_large (model 11), full cycle
 
