@@ -8,5 +8,7 @@ events.out.tfevents.*
 __pycache__/
 .pytest_cache/
 
-# Paper: kept out of git for now (owner, 2026-10-20); remove this line when the paper is to be committed
+# Paper and its scripts: kept out of git for now (owner, 2026-10-20); remove these lines when the paper is to be committed
 bangla-heteronym-benchmark-paper/
+scripts/paper_assets.py
+scripts/paper_bangla.py
