@@ -17,17 +17,16 @@ Latency = batch size 1, full path (normalizer + tokenizer + model + decoding), p
 | 7 | indicbertv2_mlm | 278.0M | fp16 | 5e-05 | 98.34 ± 0.21 | 98.29 ± 0.21 | 6.2 | 11.3 | 31.4 | 1068 MB | done |
 | 8 | mdeberta_v3_base | 278.2M | fp32 | 3e-05 | 97.61 ± 0.14 | 97.48 ± 0.10 | 21.2 | 24.9 | 118.2 | 1081 MB | done |
 | 9 | mt5_small | 300.2M | fp32 | 0.0003 | 93.36 ± 0.21 | 92.99 ± 0.18 | 57.3 | 307.6 | 923.6 | 1165 MB | done |
-| 10 | byt5_small | ~300M |  |  |  |  |  |  |  |  | running |
-| 11 | banglabert_large | 335.6M | fp16 | 2e-05 | 99.18 ± 0.16 | 99.14 ± 0.16 | 11.7 | 22.8 | 107.8 | 1282 MB | done |
-| 12 | xlm_roberta_large | 559.9M | fp16 | 2e-05 | 98.43 ± 0.19 | 98.34 ± 0.14 | 23.5 | 17.8 | 126.4 | 2157 MB | done |
-| 13 | mt5_base | 582.4M | fp32 | 0.0003 | 96.11 ± 0.16 | 95.99 ± 0.24 | 124.6 | 436.2 | 1758.6 | 2242 MB | done |
+| 10 | banglabert_large | 335.6M | fp16 | 2e-05 | 99.18 ± 0.16 | 99.14 ± 0.16 | 11.7 | 22.8 | 107.8 | 1282 MB | done |
+| 11 | xlm_roberta_large | 559.9M | fp16 | 2e-05 | 98.43 ± 0.19 | 98.34 ± 0.14 | 23.5 | 17.8 | 126.4 | 2157 MB | done |
+| 12 | mt5_base | 582.4M | fp32 | 0.0003 | 96.11 ± 0.16 | 95.99 ± 0.24 | 124.6 | 436.2 | 1758.6 | 2242 MB | done |
 
-Disk used by `checkpoints/`: 14G.
+Disk used by `checkpoints/`: 13G.
 <!-- /results-table -->
 
 ## Observations for the paper
 
-- Tokenizers and the ZWNJ (`results/tokenizer_zwnj.csv`): only ByT5 round-trips the ZWNJ. WordPiece tokenizers
+- Tokenizers and the ZWNJ (`results/tokenizer_zwnj.csv`): none of the 12 benchmarked tokenizers round-trips the ZWNJ. WordPiece tokenizers
   (BanglaBERT small/base/large, bangla-bert-base, MuRIL) drop it before tokenization, so those encoders never see
   it (token ids identical with and without it). The sentencepiece models (XLM-R, mDeBERTa, mT5, BanglaT5) and
   IndicBERTv2 produce different ids with a ZWNJ but cannot decode it back; T5 tokenizers decode it as a space.
@@ -61,10 +60,18 @@ small; the no-marker gain (0.49 points, about 3 std) is the clearest.
 against 98.37 ± 0.18 / 98.37 ± 0.12 for the full-sentence output. Generating only the reading is as accurate within
 noise but less stable across seeds; it produces much shorter outputs, so its latency gain should be measured if it is
 used in practice. Ablation checkpoints are deleted after evaluation, so one more seed-42 run
-(`abl_output_target_keep`, same settings, checkpoint kept) is queued right after stages 5-8 and before ByT5; its
+(`abl_output_target_keep`, same settings, checkpoint kept) is queued right after stages 5-8; its
 latency goes to `runs/banglat5/latency_target.json` (variant `target-only` in `results/latency.csv`).
 
 **Next.** Learning curves (started 18:32), candidate scoring, unseen-word split.
+
+### 2026-10-20 18:55: ByT5-small dropped from the benchmark
+
+The owner dropped byt5_small: the remaining ByT5 work (2 more learning rates, 3 seeds, the unseen-word split and
+latency) was estimated at ~50 h of T4 time, about two thirds of everything left (one lr-search run took 6.9 h). The
+benchmark now has 12 models. Removed: `configs/byt5_small.yaml`, its finished lr 1e-4 run (dev ~93%) and its
+checkpoints; the queue ends after stages 5-8 and the target-only BanglaT5 latency run. Earlier log entries about
+ByT5 (smoke test, memory, the queue order changes) are kept as history.
 
 ### 2026-10-20 14:20: stages 5-8 scheduled before the rest of ByT5
 

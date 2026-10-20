@@ -4,7 +4,6 @@ banglabert,ElectraTokenizerFast,False,False,0.0367,0.0,False,,,
 banglabert_large,ElectraTokenizerFast,False,False,0.0367,0.0,False,,,
 banglabert_small,ElectraTokenizerFast,False,False,0.0367,0.0,False,,,
 banglat5,T5TokenizerFast,False,True,0.6603,0.0,True,1.0,0.0,0.0
-byt5_small,ByT5Tokenizer,True,True,1.0,0.0,False,1.0,0.0,0.0
 indicbertv2_mlm,PreTrainedTokenizerFast,False,True,0.0,0.0,False,,,
 mdeberta_v3_base,DebertaV2TokenizerFast,False,True,0.6603,0.0,False,,,
 mt5_base,T5TokenizerFast,False,True,0.6603,0.0,True,1.0,0.0,0.0

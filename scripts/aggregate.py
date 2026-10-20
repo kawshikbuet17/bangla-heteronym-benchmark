@@ -17,7 +17,7 @@ RUNS, RESULTS, PLOTS = Path("runs"), Path("results"), Path("results/plots")
 MODELS = [
     ("banglabert_small", "~13M"), ("banglabert", "~110M"), ("bangla_bert_base", "~165M"), ("muril_base", "~237M"),
     ("banglat5", "~250M"), ("xlm_roberta_base", "~278M"), ("indicbertv2_mlm", "~278M"), ("mdeberta_v3_base", "~280M"),
-    ("mt5_small", "~300M"), ("byt5_small", "~300M"), ("banglabert_large", "~335M"), ("xlm_roberta_large", "~560M"),
+    ("mt5_small", "~300M"), ("banglabert_large", "~335M"), ("xlm_roberta_large", "~560M"),
     ("mt5_base", "~580M"),
 ]
 LEARNING_CURVE = {"lc2": 2, "lc5": 5, "lc10": 10, "main": 14}

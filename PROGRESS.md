@@ -3,11 +3,11 @@
 Spec: PROMPTS.md. GPU: T4 = `CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=1`. Env: conda `hetero`.
 
 1. [x] Setup: conda env, requirements.txt, git init, data download, splits, data checks, latency inputs, code, tests. Commit.
-2. [x] Smoke test all 13 models (~20 steps, tiny subset). Fix + log. Commit.
+2. [x] Smoke test all 13 models (ByT5 later dropped, 12 remain) (~20 steps, tiny subset). Fix + log. Commit.
 3. [x] banglabert_small (user OK 2026-10-18: continue through all models, report after each) full cycle -> report, WAIT for user OK.
-4. [ ] Remaining models one by one (one commit each):
+4. [x] Remaining models one by one (one commit each):
    - [x] banglabert  - [x] bangla-bert-base  - [x] muril  - [x] banglat5  - [x] xlm-roberta-base
-   - [x] IndicBERTv2  - [x] mdeberta  - [x] mt5-small  - [ ] byt5-small  - [x] banglabert_large
+   - [x] IndicBERTv2  - [x] mdeberta  - [x] mt5-small  - [-] byt5-small (dropped by owner 2026-10-20 18:55)  - [x] banglabert_large
    - [x] xlm-roberta-large  - [x] mt5-base (optional)
 5. [ ] Candidate scoring: best 3 encoders, main + unseen split, latency. Commit.
 6. [ ] Unseen-word split: seq2seq x 3 seeds. Commit.
@@ -20,4 +20,4 @@ Spec: PROMPTS.md. GPU: T4 = `CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=1
    2026-10-19 15:55: queue2 (scratchpad/queue2.sh): triton containers stopped while training, started for each 'measure' phase.
    2026-10-19 16:18: paused for office hours (services back up); hetero-resume restarts queue2 at 17:15.
 10. [ ] Paper (user request 2026-10-20): bangla-heteronym-benchmark-paper/ with ACL preprint template (XeLaTeX, bundled Bengali font),
-    tables generated from results/ by scripts/paper_tables.py, ByT5 + stages 5-8 as \PH placeholders; refill after.
+    tables generated from results/ by scripts/paper_tables.py, stages 5-8 as \PH placeholders; refill after. ByT5 removed from the paper.
