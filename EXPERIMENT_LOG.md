@@ -20,9 +20,9 @@ Latency = batch size 1, full path (normalizer + tokenizer + model + decoding), p
 | 10 | byt5_small | ~300M |  |  |  |  |  |  |  |  | running |
 | 11 | banglabert_large | 335.6M | fp16 | 2e-05 | 99.18 ± 0.16 | 99.14 ± 0.16 | 11.7 | 22.8 | 107.8 | 1282 MB | done |
 | 12 | xlm_roberta_large | 559.9M | fp16 | 2e-05 | 98.43 ± 0.19 | 98.34 ± 0.14 | 23.5 | 17.8 | 126.4 | 2157 MB | done |
-| 13 | mt5_base | ~580M |  |  |  |  |  |  |  |  | pending |
+| 13 | mt5_base | 582.4M | fp32 | 0.0003 | 96.11 ± 0.16 | 95.99 ± 0.24 | 124.6 | 436.2 | 1758.6 | 2242 MB | done |
 
-Disk used by `checkpoints/`: 11G.
+Disk used by `checkpoints/`: 13G.
 <!-- /results-table -->
 
 ## Observations for the paper
@@ -36,6 +36,44 @@ Disk used by `checkpoints/`: 11G.
   `do_lower_case=False, strip_accents=False`. Anyone using the hub default gets a crippled tokenizer.
 
 ## Entries (newest first)
+
+### 2026-10-20 07:47: mt5_base (model 13, optional), full cycle
+
+**Run.** Queue (`train` 2026-10-19 20:21 -> 2026-10-20 06:49 with the triton containers stopped; `measure`
+06:50-07:45 with them running idle). Seq2seq, full-sentence output, no normalizer, ZWNJ removed model-side,
+fp32, 8 × 2 (planned setting; needs the full T4).
+
+**lr search (dev).** 1e-4: 96.20 · **3e-4: 96.56** · 5e-4: 95.47.
+
+**Result (lr 3e-4).** Test target accuracy **96.11 ± 0.16** (96.20 / 96.20 / 95.92), macro-F1 95.99 ± 0.24;
+2-reading 96.2%, 3-reading 87.0%. Other-word change rate 0% in all three seeds. Dev 96.56 / 96.38 / 96.92; seed
+44 kept. Best epochs 15 / 14 / 13, all runs used the full 15 epochs, ~2 h 05 min per seed, peak training memory
+11.1 GB, checkpoint 2.24 GB.
+
+**Latency.** 18.3 generated tokens on average (same mT5 tokenizer as mt5_small).
+
+| device | precision | p50 | p95 | p99 | forward (generate) p50 | throughput | paragraph (8 heteronyms) |
+|---|---|---|---|---|---|---|---|
+| T4 GPU | fp32 | 436.2 ms | 858.1 ms | 1029.8 ms | 448.6 ms | 8 /s (b8), 24 /s (b32) | 1487.6 ms (185.9 ms/heteronym) |
+| CPU, 4 threads | fp32 | 1758.6 ms | 3481.5 ms | 4195.2 ms | 1681.6 ms | 2 /s (b8) | 5389.1 ms (673.6 ms/heteronym) |
+| CPU, 1 thread | fp32 | 2815.2 ms | 5590.2 ms | 6839.5 ms | 2808.7 ms | - | 15174.9 ms (1896.9 ms/heteronym) |
+
+Peak GPU memory at inference: 2.9 GB. Generation costs ~24.5 ms per output token on the T4 (448.6 / 18.3).
+
+**phoneticize demo.** All 8 correct (কর 0.994).
+
+**Observations.** Doubling mT5 (300M -> 582M) gains 2.75 points (93.36 -> 96.11) but stays 2.3 below the
+248M BanglaT5 (98.37), at 1.8× BanglaT5's GPU latency and 5.4× its CPU latency: the Bangla-specific T5 is better
+and cheaper. Like mt5_small it was still improving at the 15-epoch cap (best epochs 13-15), so both mT5 models
+are under-trained under the planned budget. It never changed a non-target word. Slowest model of the benchmark.
+Hardest: কাল (61.1%), আসর / মেলা (66.7%).
+
+**Containers.** Stopped 2026-10-19 20:21:31 -> 2026-10-20 06:50 for training (10 h 29 min), running for the
+latency measurement, stopped again 07:45:52 for byt5_small.
+
+**Problems.** None.
+
+**Next.** byt5_small (last model; started 07:45, 8 × 2 on the full T4).
 
 ### 2026-10-19 20:22: xlm_roberta_large (model 12), full cycle
 

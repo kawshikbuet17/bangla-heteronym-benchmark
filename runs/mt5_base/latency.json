@@ -1,0 +1,122 @@
+{
+  "checkpoint": "checkpoints/mt5_base",
+  "model_id": "google/mt5-base",
+  "model_type": "seq2seq",
+  "date": "2026-10-20T06:50:32",
+  "packages": {
+    "torch": "2.7.1+cu126",
+    "transformers": "4.57.6",
+    "tokenizers": "0.22.2",
+    "accelerate": "1.15.0",
+    "datasets": "5.0.1",
+    "safetensors": "0.8.0",
+    "sentencepiece": "0.2.2",
+    "protobuf": "7.36.2",
+    "normalizer": "0.0.1",
+    "numpy": "2.4.6",
+    "pandas": "3.0.6",
+    "scikit-learn": "1.9.1"
+  },
+  "gpu": {
+    "device": "Tesla T4",
+    "precision": "fp32",
+    "threads": null,
+    "timed_calls": 200,
+    "warmup_calls": 20,
+    "batch1_full_ms": {
+      "mean": 473.55198715114966,
+      "p50": 436.24892248772085,
+      "p95": 858.0830390565095,
+      "p99": 1029.7671032045032
+    },
+    "batch1_forward_ms": {
+      "mean": 482.55470741307363,
+      "p50": 448.6421386245638,
+      "p95": 851.9479516893622,
+      "p99": 1017.3910825327034
+    },
+    "throughput_sentences_per_s": {
+      "8": 7.789413012681146,
+      "32": 23.815605719375604
+    },
+    "phoneticize": {
+      "heteronyms": 8,
+      "repeats": 10,
+      "total_ms": {
+        "mean": 1497.0214046537876,
+        "p50": 1487.5667858868837,
+        "p95": 1543.1343697477132,
+        "p99": 1571.8520397040993
+      },
+      "ms_per_heteronym": 185.94584823586047
+    },
+    "avg_generated_tokens": 18.32,
+    "peak_gpu_memory_mb": 2897
+  },
+  "cpu_4_threads": {
+    "device": "Intel(R) Xeon(R) CPU E5-2650 v3 @ 2.30GHz",
+    "precision": "fp32",
+    "threads": 4,
+    "timed_calls": 200,
+    "warmup_calls": 20,
+    "batch1_full_ms": {
+      "mean": 1886.5473917638883,
+      "p50": 1758.5634144488722,
+      "p95": 3481.4564911881444,
+      "p99": 4195.17664097715
+    },
+    "batch1_forward_ms": {
+      "mean": 1811.3004709058441,
+      "p50": 1681.6153340041637,
+      "p95": 3335.4582008207203,
+      "p99": 3989.831376001237
+    },
+    "throughput_sentences_per_s": {
+      "8": 2.089763939820863
+    },
+    "phoneticize": {
+      "heteronyms": 8,
+      "repeats": 10,
+      "total_ms": {
+        "mean": 5406.365559063852,
+        "p50": 5389.134290395305,
+        "p95": 5506.713046762161,
+        "p99": 5564.057862958871
+      },
+      "ms_per_heteronym": 673.6417862994131
+    },
+    "avg_generated_tokens": 18.32
+  },
+  "cpu_1_thread": {
+    "device": "Intel(R) Xeon(R) CPU E5-2650 v3 @ 2.30GHz",
+    "precision": "fp32",
+    "threads": 1,
+    "timed_calls": 200,
+    "warmup_calls": 20,
+    "batch1_full_ms": {
+      "mean": 3064.764751016628,
+      "p50": 2815.2497715782374,
+      "p95": 5590.229539363644,
+      "p99": 6839.533613831733
+    },
+    "batch1_forward_ms": {
+      "mean": 3041.0113896406256,
+      "p50": 2808.718597982079,
+      "p95": 5558.731122198512,
+      "p99": 6650.879866820757
+    },
+    "throughput_sentences_per_s": {},
+    "phoneticize": {
+      "heteronyms": 8,
+      "repeats": 10,
+      "total_ms": {
+        "mean": 15226.095371739939,
+        "p50": 15174.887903267518,
+        "p95": 15406.020150030963,
+        "p99": 15426.25456535723
+      },
+      "ms_per_heteronym": 1896.8609879084397
+    },
+    "avg_generated_tokens": 18.32
+  }
+}

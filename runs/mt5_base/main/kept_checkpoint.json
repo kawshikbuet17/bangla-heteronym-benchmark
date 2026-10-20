@@ -1,0 +1,10 @@
+{
+  "seed": 44,
+  "dev_accuracy_by_seed": {
+    "seed42": 0.9655797101449275,
+    "seed43": 0.9637681159420289,
+    "seed44": 0.9692028985507246
+  },
+  "checkpoint": "checkpoints/mt5_base",
+  "size_mb": 2241.5
+}
