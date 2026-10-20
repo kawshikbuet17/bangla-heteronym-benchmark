@@ -12,6 +12,8 @@ Spec: PROMPTS.md. GPU: T4 = `CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=1
 5. [ ] Candidate scoring: best 3 encoders, main + unseen split, latency. Commit.
 6. [ ] Unseen-word split: seq2seq x 3 seeds. Commit.
 7. [ ] Learning curve 2/5/10/14: best 3 encoders + best seq2seq x 3 seeds. Commit.
+   Extended (owner, 2026-10-20 19:05): all 12 models; the other 8 run after stages 5-8, mT5-base last.
+   Results are committed automatically after every finished queue step (scratchpad/autocommit.sh).
 8. [ ] Ablations. Commit.
 9. [ ] Final aggregation + summary table. Commit.
    Note: xlm_roberta_large + mt5_base need triton containers on T4 stopped (user allowed); restart after.
