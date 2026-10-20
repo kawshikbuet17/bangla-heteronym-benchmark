@@ -32,6 +32,15 @@ Accuracy and macro-F1 in %, mean ± std over seeds. Latency: batch 1, full path,
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | banglat5 | seq2seq | 247.6M | fp32 | 16x1 | 0.0005 | 3 | 98.28 ± 0.47 | 98.13 ± 0.57 | 98.4 / 88.9 |  | 25.1 | 12.0 |  |  |  |
 
+## lc10 / test
+
+| model | type | params | precision | batch | lr | seeds | accuracy | macro-F1 | acc 2 / 3 readings | other-word change | train time (min) | epochs | GPU p50 | CPU4 p50 | CPU1 p50 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| banglabert | encoder | 110.0M | fp16 | 32x1 | 2e-05 | 1 | 98.73 | 98.65 | 98.9 / 88.9 |  | 2.7 | 10.0 | 12.5 | 32.8 | 84.5 |
+| banglat5 | seq2seq | 247.6M | fp32 | 16x1 | 0.0005 | 1 | 98.73 | 98.83 | 98.7 / 100.0 | 0.5 | 33.7 | 15.0 | 236.8 | 323.3 | 745.9 |
+| banglabert_large | encoder | 335.6M | fp16 | 16x2 | 2e-05 | 1 | 98.73 | 98.66 | 98.9 / 88.9 |  | 10.3 | 10.0 | 22.8 | 107.8 | 301.8 |
+| xlm_roberta_large | encoder | 559.9M | fp16 | 8x4 | 2e-05 | 1 | 97.64 | 97.51 | 97.7 / 94.4 |  | 18.4 | 10.0 | 17.8 | 126.4 | 380.8 |
+
 ## lc2 / test
 
 | model | type | params | precision | batch | lr | seeds | accuracy | macro-F1 | acc 2 / 3 readings | other-word change | train time (min) | epochs | GPU p50 | CPU4 p50 | CPU1 p50 |
