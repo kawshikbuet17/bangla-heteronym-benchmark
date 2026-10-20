@@ -3,8 +3,9 @@
 ## 1. What this is
 
 A Bangla heteronym is a word with one spelling and several pronunciations. Given a sentence and one target word
-in it, the model picks which pronunciation is meant. Several encoders (classification, candidate scoring) and
-seq2seq models are fine-tuned and compared on the same splits, for accuracy and latency.
+in it, the model picks which pronunciation is meant. 12 pretrained models (encoders used as classifiers or
+candidate scorers, and T5-style seq2seq models) are fine-tuned and compared on the same fixed splits, for accuracy
+and latency.
 
 ```
 input : তুমি গ্রাফ পেপারে সরলরেখাটা আঁক।      target: আঁক   candidates: আঁক্‌ | আঁকো
@@ -12,8 +13,17 @@ output: তুমি গ্রাফ পেপারে সরলরেখাট
 ```
 
 Dataset: [kawshikbuet17/bangla-heteronyms](https://huggingface.co/datasets/kawshikbuet17/bangla-heteronyms)
-(public, 7,360 sentences, 183 words, 368 pronunciations). Pronunciations use hasanta + ZWNJ (`্‌`, U+09CD U+200C);
-the ZWNJ is never removed from the data.
+(public, 7,360 sentences, 183 words, 368 pronunciations, 20 sentences per pronunciation). Pronunciations use
+hasanta + ZWNJ (`্‌`, U+09CD U+200C); the ZWNJ is never removed from the data.
+
+Where to look first:
+
+| File | What it holds |
+|---|---|
+| this README | how to run everything, what every experiment means, things to know |
+| [EXPERIMENT_LOG.md](EXPERIMENT_LOG.md) | dated log of every run, problem, fix and decision, plus observations for the paper |
+| [PROGRESS.md](PROGRESS.md) | the step plan and which steps are done |
+| [results/](results/) | aggregated tables and plots (regenerated from `runs/` by `scripts.aggregate`) |
 
 ## 2. Setup
 
@@ -27,9 +37,10 @@ pip install -r requirements/banglabert.txt
 ```
 
 No Hugging Face login is needed. On the original server the T4 is GPU index 1; `scripts/env.sh` pins it with
-`CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=1` (override `CUDA_VISIBLE_DEVICES` elsewhere).
+`CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=1` (override `CUDA_VISIBLE_DEVICES` elsewhere). All scripts
+source `scripts/env.sh`; run single Python steps after `source scripts/env.sh`.
 
-## 3. Data
+## 3. Data and splits
 
 ```bash
 python -m src.data                     # download the CSVs (pinned dataset commit) to data/raw/
@@ -38,30 +49,83 @@ python -m scripts.check_tokenizers     # ZWNJ / round-trip report per tokenizer 
 python -m pytest tests                 # phoneticize + data tests
 ```
 
-`python -m src.splits create` made the splits once (seed 42) and refuses to overwrite them. Splits: main
-(14/3/3 sentences per pronunciation), unseen-word (37 held-out words, test only), learning-curve subsets
-(2/5/10/14 per pronunciation, nested). Put a real-text test set in `data/real_test.csv` (same columns) and every
-later run also reports it; for existing checkpoints use `src.evaluate` (below).
+`python -m src.splits create` made the splits once (seed 42) and refuses to overwrite them. Never regenerate them:
+every result in this repo depends on these exact files.
 
-## 4. Run experiments
+| Split file(s) | Content | Used by |
+|---|---|---|
+| `train` / `dev` / `test` | 14 / 3 / 3 sentences per pronunciation (5,152 / 1,104 / 1,104) | everything ("main") |
+| `unseen_train` / `unseen_dev` / `unseen_test` | 37 words (20% of the words, stratified by number of pronunciations) are held out completely; their sentences form `unseen_test`; train/dev are the main ones without those words | `unseen`, `cand_unseen` |
+| `train_lc2` / `train_lc5` / `train_lc10` | the first 2 / 5 / 10 training sentences per pronunciation (736 / 1,840 / 3,680) | learning curves |
+
+The learning-curve subsets are nested (`lc2` ⊂ `lc5` ⊂ `lc10` ⊂ `train`), and they use the normal dev and test sets,
+so the points are comparable. "14" on a learning curve is simply the main run.
+
+A real-text test set can be added as `data/real_test.csv` (same columns); every later run also reports it, and for
+existing checkpoints use `src.evaluate` (section 6).
+
+## 4. Approaches
+
+The target word is marked in the input as `@ word @` (the marker), so the model knows which occurrence is meant.
+
+| `model_type` | How it predicts | Confidence |
+|---|---|---|
+| `encoder` | classifier: the hidden state of the opening marker token goes to a linear layer with one output per reading slot; slots the word does not have are masked out | softmax probability |
+| `candidate` | candidate scoring: one (marked sentence, candidate pronunciation) pair per candidate, one score each, softmax over the word's candidates; works for words never seen in training | softmax probability |
+| `seq2seq` | input `phonetic: <marked sentence>`, the model writes the whole sentence back with the target replaced by its pronunciation (greedy decoding); the generated word is mapped back to a candidate, and an output that matches no candidate counts as wrong | exp(mean token log-prob) |
+
+All models are wrapped by `src.predict.Predictor`, so a checkpoint of any type is used the same way (section 7).
+
+## 5. Experiments: what each one means
+
+Every experiment is a **setting** (`SETTINGS` in `src/train.py`) trained with 3 seeds (42, 43, 44) at the model's
+selected learning rate. Results are reported as mean ± std over the seeds. Output: `runs/{model}/{setting}/seed{seed}/`.
+
+| Setting | Question it answers | Models | Results file |
+|---|---|---|---|
+| `lr_search` | which learning rate is best? one seed-42 run per lr in the config's `lr_grid`, judged on **dev** only; `scripts.select_lr` writes `runs/{model}/best_lr.json` | all | `results/lr_search.csv` |
+| `main` | the benchmark itself: accuracy, macro-F1, per-word accuracy on the main test set | all 12 | `results/summary.md`, `per_word.csv` |
+| `unseen` | can a model handle a heteronym it never saw in training? (only seq2seq and candidate models can, because a classifier has no slots for unknown words) | seq2seq models | `results/summary.md` |
+| `cand_main`, `cand_unseen` | candidate scoring on the main and unseen splits; is it as accurate as the classifier, and does it generalize to unseen words? | 3 best encoders | `results/summary.md`, `latency.csv` |
+| `lc2`, `lc5`, `lc10` | **learning curve**: how many labelled sentences per pronunciation are needed? | all 12 | `results/learning_curve.csv`, `plots/learning_curves.png` |
+| `abl_marker_special` | marker `<h> word </h>` (new tokens) instead of `@ word @` | BanglaBERT-large | `results/ablations.md` |
+| `abl_marker_none` | no marker at all (the head reads the target word's first token) | BanglaBERT-large | `results/ablations.md` |
+| `abl_head_mean`, `abl_head_cls` | pool the mean of the target's tokens, or `[CLS]`, instead of the opening marker token | BanglaBERT-large | `results/ablations.md` |
+| `abl_output_target`, `abl_output_target_keep` | seq2seq writes only the target's pronunciation instead of the whole sentence (`_keep` is one extra seed whose checkpoint is kept to measure its latency, `runs/banglat5/latency_target.json`) | BanglaT5 | `results/ablations.md`, `latency.csv` |
+
+How to read the learning curve: plot test accuracy against 2 / 5 / 10 / 14 sentences per pronunciation. Where the
+curve flattens (the difference to the next point is within the seed std), more data stops helping; that point is the
+data budget per pronunciation when adding new heteronyms. A curve still rising at 14 means more data would likely help.
+
+Why some experiments use only a few models: ablations explain *why* the best setup works, so one strong model is
+enough; candidate scoring and the unseen split concern the models one would deploy (or the only ones that can handle
+unseen words). Running every setting for all 12 models would multiply the GPU time without changing the conclusions.
+
+ByT5-small was planned as a 13th model and dropped (2026-10-20): one run took ~7 h on the T4, and its remaining runs
+would have taken ~50 h. See EXPERIMENT_LOG.md.
+
+## 6. Run experiments
 
 Full cycle for one model (lr search, 3 seeds, keep best checkpoint, latency, demo, requirements, aggregation),
 best inside tmux; logs go to `logs/{model}.log`:
 
 ```bash
 bash scripts/run_model.sh banglabert_small            # or: ... banglabert_small train | measure
+bash scripts/run_setting.sh lc2 banglabert banglat5   # one setting, seeds 42-44, for the listed models
 ```
 
 `train` runs the lr search, the 3 seeds and keeps the best checkpoint; `measure` runs the latency benchmark,
-the phoneticize demo, the requirements file and the aggregation (the default runs both).
+the phoneticize demo, the requirements file and the aggregation (the default runs both). `run_setting.sh` needs the
+model's `main` cycle first (it uses `best_lr.json`); for `cand_main` it also keeps the best seed in
+`checkpoints/{model}_cand`.
 
-Single steps (run from the repo root inside the env, with the T4 pinned: `source scripts/env.sh`):
+Single steps:
 
 ```bash
 python -m src.train --config configs/banglabert.yaml --lr-search 3e-5      # one lr-search run (seed 42, dev only)
 python -m scripts.select_lr banglabert                                     # -> runs/banglabert/best_lr.json
 python -m src.train --config configs/banglabert.yaml --seed 43             # one seed with the best lr
-python -m src.train --config configs/banglabert.yaml --seed 42 --setting cand_main   # other settings, see SETTINGS in src/train.py
+python -m src.train --config configs/banglabert.yaml --seed 42 --setting cand_main   # any setting from section 5
 python -m scripts.keep_best banglabert main checkpoints/banglabert         # keep best seed's checkpoint
 python -m src.evaluate --checkpoint checkpoints/banglabert --data data/real_test.csv --out runs/banglabert/real_test.json
 python -m src.benchmark_latency --checkpoint checkpoints/banglabert --out runs/banglabert/latency.json
@@ -69,10 +133,32 @@ python -m scripts.aggregate                                                # res
 bash scripts/smoke.sh                                                      # 20-step smoke test of every model
 ```
 
-Resuming: every run whose `runs/{model}/{setting}/seed{seed}/metrics.json` exists is skipped, so re-running
-the same command continues where it stopped. Training curves: `tensorboard --logdir runs`.
+Resuming: every run whose `runs/{model}/{setting}/seed{seed}/metrics.json` exists is skipped, so re-running the same
+command continues where it stopped. Training curves: `tensorboard --logdir runs`.
 
-## 5. Use a trained model
+Training recipe (same for every model, set in `configs/{model}.yaml`): AdamW, weight decay 0.01, 10% linear warm-up
+then linear decay, gradient clipping 1.0, max length 128, at most 10 epochs (encoders) or 15 (seq2seq), early
+stopping with patience 3 on dev accuracy, the best epoch's weights are kept.
+
+## 7. What is measured
+
+Per run, `runs/{model}/{setting}/seed{seed}/`:
+
+| File | Content |
+|---|---|
+| `config.json` | the full config actually used, package versions, GPU, git commit, and any automatic `adjustments` |
+| `metrics.json` | `train` (time, epochs, best epoch, steps, peak GPU memory, params, checkpoint size) and `dev` / `test` (accuracy, macro-F1, accuracy by word and by number of readings; seq2seq also `other_word_change_rate`, the share of outputs that change a word other than the target, and `avg_generated_tokens`) |
+| `predictions.csv` | every test sentence with gold, prediction and confidence |
+| `train_log.csv`, `tb/` | loss, learning rate, grad norm and dev accuracy per step / epoch (`tb/` is not committed) |
+
+**Latency** (`runs/{model}/latency.json`, `latency_cand.json`, `latency_target.json`; table `results/latency.csv`)
+is the time to answer one request through the full path: normalizer, tokenizer, model, decoding and mapping back
+to a pronunciation. For seq2seq it is therefore mostly output generation time. Measured on the T4 GPU and on CPU
+with 4 threads and 1 thread: batch size 1 (20 warm-up calls, 200 timed calls; mean, **p50**, p95, p99), forward
+pass only, throughput at batch 8 and 32, the phoneticize demo paragraph, and peak GPU memory. Tables report p50 at
+batch size 1.
+
+## 8. Use a trained model
 
 ```bash
 python -m src.predict --checkpoint checkpoints/banglabert --text "তুমি একটু অপেক্ষা কর, আমি আসছি। বিকেলে পার্কে খেল।"
@@ -92,10 +178,15 @@ print(predictor.predict("তুমি গ্রাফ পেপারে সর�
 `phoneticize` splits the text on `।`, `?`, `!` and newlines, finds every whole-word occurrence of a known
 heteronym, marks one occurrence at a time, predicts all of them in one batch and rebuilds the exact text.
 
-## 6. Results
+Kept checkpoints (not committed, `checkpoints/` is git-ignored): `checkpoints/{model}` is the best `main` seed of
+each model, `checkpoints/{model}_cand` the best `cand_main` seed. All other runs' checkpoints are deleted after
+evaluation (`checkpoints/_runs/` holds them while a run is in progress).
+
+## 9. Results
 
 Full tables: [results/summary.md](results/summary.md), [results/latency.csv](results/latency.csv),
-[EXPERIMENT_LOG.md](EXPERIMENT_LOG.md) (setup, problems, decisions, observations).
+[results/ablations.md](results/ablations.md), [results/learning_curve.csv](results/learning_curve.csv),
+plots in [results/plots/](results/plots/), and [EXPERIMENT_LOG.md](EXPERIMENT_LOG.md) for observations.
 
 <!-- results-table -->
 | # | model | size | precision | best lr | test acc (%) | macro-F1 (%) | train time / seed (min) | GPU p50 (ms) | CPU p50 (ms, 4 thr) |
@@ -114,21 +205,64 @@ Full tables: [results/summary.md](results/summary.md), [results/latency.csv](res
 | 12 | mt5_base | 582.4M | fp32 | 0.0003 | 96.11 ± 0.16 | 95.99 ± 0.24 | 124.6 | 436.2 | 1758.6 |
 <!-- /results-table -->
 
-## 7. Repo layout
+The table between the `results-table` markers (here and in EXPERIMENT_LOG.md) is rewritten by `scripts.aggregate`;
+don't edit it by hand.
+
+## 10. Things to know (pitfalls found while building this)
+
+- **ZWNJ after hasanta.** No tokenizer here round-trips it (`results/tokenizer_zwnj.csv`). WordPiece models
+  (BanglaBERT, bangla-bert-base, MuRIL) silently drop it; SentencePiece models give different ids but cannot decode
+  it back, and T5 tokenizers decode it as a space, which splits a word in two. So the data keeps it, seq2seq models
+  remove it from their targets (`strip_zwnj`), and a seq2seq output is compared to the candidates after the same
+  normalizer + tokenizer round trip, then mapped back to the original candidate (with its ZWNJ).
+- **bangla-bert-base lowercasing.** `sagorsarker/bangla-bert-base` has no tokenizer config, so the default
+  lowercasing strips Bangla vowel signs. Its config sets `tokenizer_kwargs: {do_lower_case: false, strip_accents: false}`.
+- **Word boundaries.** Python's `\b` does not work for Bangla (vowel signs are not word characters), so heteronyms are
+  found with an explicit boundary set (`BOUNDARY_CHARS` in `src/data.py`: `।`, `॥`, ASCII punctuation, curly quotes,
+  dashes, whitespace).
+- **Normalizer.** Inputs go through the csebuetnlp normalizer (pinned git commit in `requirements.txt`) before
+  tokenization, as the BanglaBERT/BanglaT5 authors recommend.
+- **Automatic fallbacks** (`src/train.py`, recorded in `config.json` under `adjustments` and in EXPERIMENT_LOG):
+  on CUDA OOM the batch is halved and gradient accumulation doubled (same effective batch), then gradient
+  checkpointing; on a non-finite fp16 loss the run restarts in fp32. mT5, mDeBERTa and BanglaT5 are set to fp32 in their
+  configs, because T5 and DeBERTa-v3 models are known to be unstable in fp16.
+- **Seq2seq memory at evaluation.** Generation scores are collected with a small logits processor
+  (`GreedyLogProbs`) instead of `output_scores`, which kept the whole vocabulary distribution per step and ran out of
+  memory for mT5.
+- **Shared GPU (original server).** Two idle Triton inference services also live on the T4. They are stopped while
+  the largest models train (to free memory) and are running, idle, during every latency measurement, so all latency
+  numbers share the same conditions.
+- **mT5 epoch limit.** Both mT5 models were still improving at the 15-epoch limit; their numbers are a lower bound
+  under this shared recipe.
+- **Reproducibility.** Splits, configs and seeds are fixed; `config.json` records package versions and the git commit
+  of every run. Results are reproducible up to GPU non-determinism (expect differences within the seed std).
+
+## 11. Adding a model or data
+
+- **New model:** copy a config in `configs/` with the same `model_type`, set `model_name`, `model_id`, `precision`,
+  `batch_size` and `lr_grid`; run `bash scripts/smoke.sh <model>` first, then `bash scripts/run_model.sh <model>`, and
+  add it to `MODELS` in `scripts/aggregate.py` (table order). `scripts.write_requirements` writes its requirements file.
+- **New heteronyms or sentences:** the dataset is pinned to one commit in `src/data.py`. A new dataset version needs
+  new splits (a new split seed or folder, never overwriting the old ones) and re-running every model, otherwise the
+  numbers are not comparable. The learning curve tells roughly how many sentences per pronunciation to write.
+
+## 12. Repo layout
 
 ```
 configs/        one YAML per model
 requirements/   pinned packages per model
 src/            data, splits, models, train, evaluate, predict, benchmark_latency, env
-scripts/        run_model.sh, smoke.sh, select_lr, keep_best, aggregate, write_requirements, check_tokenizers
+scripts/        run_model.sh, run_setting.sh, smoke.sh, env.sh, select_lr, keep_best, aggregate,
+                write_requirements, check_tokenizers
 tests/          phoneticize and data tests
 data/splits/    the fixed splits;  data/latency_*: latency inputs
-runs/           per-run config/metrics/predictions/train logs, latency.json, phoneticize demos
+runs/           per-run config/metrics/predictions/train logs, latency*.json, phoneticize demos
 checkpoints/    kept best models (not committed)
+logs/           training logs (not committed)
 results/        aggregated tables and plots
 ```
 
-## 8. Prepared by
+## 13. Prepared by
 
 **Kawshik Kumar Paul**  
 Senior Software Engineer | Researcher  
