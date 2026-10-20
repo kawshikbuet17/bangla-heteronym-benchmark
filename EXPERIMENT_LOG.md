@@ -70,7 +70,9 @@ latency goes to `runs/banglat5/latency_target.json` (variant `target-only` in `r
 At the owner's request, lc2/lc5/lc10 (3 seeds each) also run for banglabert_small, bangla_bert_base, muril_base,
 xlm_roberta_base, indicbertv2_mlm, mdeberta_v3_base and mt5_small after stages 5-8 and the target-only latency run,
 then mt5_base last (it alone is ~8 h). Estimated ~7 h for the seven models plus ~8.4 h for mt5_base. Finished runs
-and `results/` are committed after every queue step.
+and `results/` are committed after every queue step. Order (owner): seed by seed, i.e. seed 42 (lc2, lc5, lc10) for all seven
+models, then seed 43, then seed 44, so every model has a first curve after ~2.3 h; then mt5_base, also seed by seed
+(~2.8 h per seed).
 
 ### 2026-10-20 18:55: ByT5-small dropped from the benchmark
 
