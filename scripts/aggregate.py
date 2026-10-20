@@ -21,6 +21,8 @@ MODELS = [
     ("mt5_base", "~580M"),
 ]
 LEARNING_CURVE = {"lc2": 2, "lc5": 5, "lc10": 10, "main": 14}
+# latency file name -> variant label (runs/{model}/latency.json uses the model type)
+LATENCY_VARIANTS = {"latency_cand": "candidate", "latency_target": "target-only"}
 ABLATIONS = {
     "marker": [("main", "@ target @"), ("abl_marker_special", "<h> target </h> (new tokens)"), ("abl_marker_none", "no marker")],
     "encoder head": [("main", "opening marker token"), ("abl_head_mean", "mean of target tokens"), ("abl_head_cls", "[CLS]")],
@@ -71,7 +73,7 @@ def latency_rows() -> pd.DataFrame:
     rows = []
     for path in sorted(RUNS.glob("*/latency*.json")):
         lat, model = read_json(path), path.parts[1]
-        variant = "candidate" if path.stem == "latency_cand" else lat["model_type"]
+        variant = LATENCY_VARIANTS.get(path.stem) or lat["model_type"]
         for device in ("gpu", "cpu_4_threads", "cpu_1_thread"):
             r = lat[device]
             base = {"model": model, "variant": variant, "device": device, "device_name": r["device"],
@@ -87,10 +89,10 @@ def latency_rows() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def p50(latency: pd.DataFrame, model: str, variant_is_candidate: bool, device: str) -> float:
+def p50(latency: pd.DataFrame, model: str, variant: str, device: str) -> float:
     if latency.empty:
         return float("nan")
-    hit = latency[(latency["model"] == model) & ((latency["variant"] == "candidate") == variant_is_candidate)
+    hit = latency[(latency["model"] == model) & (latency["variant"] == variant)
                   & (latency["device"] == device) & (latency["batch_size"] == 1)]
     return float(hit["p50_ms"].iloc[0]) if len(hit) else float("nan")
 
@@ -99,7 +101,8 @@ def summarize(runs: pd.DataFrame, latency: pd.DataFrame) -> pd.DataFrame:
     rows = []
     for (model, setting, test_set), g in runs.groupby(["model", "setting", "test_set"], sort=False):
         acc, f1 = mean_std(list(g["accuracy"])), mean_std(list(g["macro_f1"]))
-        candidate = setting.startswith("cand_")
+        variant = ("candidate" if setting.startswith("cand_") else
+                   "target-only" if setting.startswith("abl_output_target") else g["model_type"].iloc[0])
         rows.append({
             "model": model, "setting": setting, "test_set": test_set, "model_type": g["model_type"].iloc[0],
             "seeds": len(g), "accuracy_mean": acc[0], "accuracy_std": acc[1], "macro_f1_mean": f1[0], "macro_f1_std": f1[1],
@@ -109,8 +112,8 @@ def summarize(runs: pd.DataFrame, latency: pd.DataFrame) -> pd.DataFrame:
             "lr": g["lr"].iloc[0], "train_time_s": g["train_time_s"].mean(), "epochs_trained": g["epochs_trained"].mean(),
             "best_epoch": g["best_epoch"].mean(), "peak_gpu_memory_train_mb": g["peak_gpu_memory_train_mb"].max(),
             "checkpoint_size_mb": g["checkpoint_size_mb"].iloc[0],
-            "gpu_p50_ms": p50(latency, model, candidate, "gpu"), "cpu4_p50_ms": p50(latency, model, candidate, "cpu_4_threads"),
-            "cpu1_p50_ms": p50(latency, model, candidate, "cpu_1_thread"),
+            "gpu_p50_ms": p50(latency, model, variant, "gpu"), "cpu4_p50_ms": p50(latency, model, variant, "cpu_4_threads"),
+            "cpu1_p50_ms": p50(latency, model, variant, "cpu_1_thread"),
             "adjustments": "; ".join(sorted({a for a in g["adjustments"] if a})),
         })
     order = {m: i for i, (m, _) in enumerate(MODELS)}

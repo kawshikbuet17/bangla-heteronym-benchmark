@@ -43,8 +43,9 @@ SETTINGS = {
     "abl_head_mean": {"head": "mean"},
     "abl_head_cls": {"head": "cls"},
     "abl_output_target": {"output": "target"},
+    "abl_output_target_keep": {"output": "target"},  # one extra seed whose checkpoint is kept for latency
 }
-KEEP_CHECKPOINT = {"main", "cand_main"}
+KEEP_CHECKPOINT = {"main", "cand_main", "abl_output_target_keep"}
 SMOKE_STEPS = 20
 
 
