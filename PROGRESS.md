@@ -15,6 +15,8 @@ Spec: PROMPTS.md. GPU: T4 = `CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=1
    Extended (owner, 2026-10-20 19:05): all 12 models; the other 8 run after stages 5-8, mT5-base last.
    Results are committed automatically after every finished queue step (scratchpad/autocommit.sh).
 8. [ ] Ablations. Commit.
+   Final set (owner, 2026-10-20 19:34, no more ablations): banglabert_large x4 + banglat5 target-only, 3 seeds, done.
+   Remaining: target-only latency (queue4).
 9. [ ] Final aggregation + summary table. Commit.
    Note: xlm_roberta_large + mt5_base need triton containers on T4 stopped (user allowed); restart after.
    Queue: tmux session hetero-queue (script in session scratchpad), log logs/queue.log; per model: log entry + commit.

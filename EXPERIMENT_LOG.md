@@ -65,6 +65,13 @@ latency goes to `runs/banglat5/latency_target.json` (variant `target-only` in `r
 
 **Next.** Learning curves (started 18:32), candidate scoring, unseen-word split.
 
+### 2026-10-20 19:34: no more ablations
+
+The owner decided against extending the ablations to more models (estimated ~8 h at one seed, ~22 h at three
+seeds). The five ablations already finished (BanglaBERT-large: two markers, two heads; BanglaT5: target-only output,
+three seeds each) are the final ablation set. The no-marker gain (+0.48) is reported as tested on one model only.
+Only the target-only latency run (`abl_output_target_keep`) remains for stage 8.
+
 ### 2026-10-20 19:05: learning curves extended to all 12 models
 
 At the owner's request, lc2/lc5/lc10 (3 seeds each) also run for banglabert_small, bangla_bert_base, muril_base,
