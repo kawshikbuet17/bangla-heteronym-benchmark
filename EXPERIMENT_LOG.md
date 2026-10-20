@@ -22,7 +22,7 @@ Latency = batch size 1, full path (normalizer + tokenizer + model + decoding), p
 | 12 | xlm_roberta_large | 559.9M | fp16 | 2e-05 | 98.43 ± 0.19 | 98.34 ± 0.14 | 23.5 | 17.8 | 126.4 | 2157 MB | done |
 | 13 | mt5_base | 582.4M | fp32 | 0.0003 | 96.11 ± 0.16 | 95.99 ± 0.24 | 124.6 | 436.2 | 1758.6 | 2242 MB | done |
 
-Disk used by `checkpoints/`: 13G.
+Disk used by `checkpoints/`: 14G.
 <!-- /results-table -->
 
 ## Observations for the paper
@@ -36,6 +36,28 @@ Disk used by `checkpoints/`: 13G.
   `do_lower_case=False, strip_accents=False`. Anyone using the hub default gets a crippled tokenizer.
 
 ## Entries (newest first)
+
+### 2026-10-20 18:40: ablations on banglabert_large (stage 8, encoder part)
+
+**Run.** `bash scripts/run_setting.sh <setting> banglabert_large` for the four encoder ablations, 3 seeds each, lr 2e-5,
+triton containers stopped; 14:41 -> 17:15 (about 38 min per setting).
+
+**Result (main test set, accuracy / macro-F1 in %, mean ± std over seeds 42/43/44).**
+
+| setting | variant | accuracy | macro-F1 |
+|---|---|---|---|
+| main | `@ target @`, head on the opening `@` | 99.18 ± 0.16 | 99.14 ± 0.16 |
+| abl_marker_special | new tokens `<h> target </h>` | 99.34 ± 0.14 | 99.29 ± 0.14 |
+| abl_marker_none | no marker, head on the target's first token | **99.67 ± 0.10** | 99.66 ± 0.11 |
+| abl_head_mean | `@` marker, mean of the target's tokens | 99.52 ± 0.14 | 99.50 ± 0.14 |
+| abl_head_cls | `@` marker, `[CLS]` token | 99.09 ± 0.31 | 99.03 ± 0.37 |
+
+**Observations.** Reading the target's own tokens (no marker, or the mean of the target tokens) works better than
+reading the `@` marker; without markers BanglaBERT-large reaches 99.67%, the best result of the benchmark so far.
+`[CLS]` is the weakest and least stable head. The differences are 1-5 test sentences out of 1,104, so they are
+small; the no-marker gain (0.49 points, about 3 std) is the clearest.
+
+**Next.** banglat5 target-only output (running), then learning curves, candidate scoring, unseen-word split.
 
 ### 2026-10-20 14:20: stages 5-8 scheduled before the rest of ByT5
 

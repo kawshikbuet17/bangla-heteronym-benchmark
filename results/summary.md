@@ -2,6 +2,42 @@
 
 Accuracy and macro-F1 in %, mean ± std over seeds. Latency: batch 1, full path, p50 ms (GPU: Tesla T4 at training precision; CPU: fp32, 4 / 1 threads).
 
+## abl_head_cls / test
+
+| model | type | params | precision | batch | lr | seeds | accuracy | macro-F1 | acc 2 / 3 readings | other-word change | train time (min) | epochs | GPU p50 | CPU4 p50 | CPU1 p50 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| banglabert_large | encoder | 335.6M | fp16 | 16x2 | 2e-05 | 3 | 99.09 ± 0.31 | 99.03 ± 0.37 | 99.2 / 94.4 |  | 12.2 | 9.0 | 22.8 | 107.8 | 301.8 |
+
+## abl_head_mean / test
+
+| model | type | params | precision | batch | lr | seeds | accuracy | macro-F1 | acc 2 / 3 readings | other-word change | train time (min) | epochs | GPU p50 | CPU4 p50 | CPU1 p50 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| banglabert_large | encoder | 335.6M | fp16 | 16x2 | 2e-05 | 3 | 99.52 ± 0.14 | 99.50 ± 0.14 | 99.5 / 98.1 |  | 12.4 | 9.0 | 22.8 | 107.8 | 301.8 |
+
+## abl_marker_none / test
+
+| model | type | params | precision | batch | lr | seeds | accuracy | macro-F1 | acc 2 / 3 readings | other-word change | train time (min) | epochs | GPU p50 | CPU4 p50 | CPU1 p50 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| banglabert_large | encoder | 335.6M | fp16 | 16x2 | 2e-05 | 3 | 99.67 ± 0.10 | 99.66 ± 0.11 | 99.7 / 100.0 |  | 12.7 | 9.3 | 22.8 | 107.8 | 301.8 |
+
+## abl_marker_special / test
+
+| model | type | params | precision | batch | lr | seeds | accuracy | macro-F1 | acc 2 / 3 readings | other-word change | train time (min) | epochs | GPU p50 | CPU4 p50 | CPU1 p50 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| banglabert_large | encoder | 335.6M | fp16 | 16x2 | 2e-05 | 3 | 99.34 ± 0.14 | 99.29 ± 0.14 | 99.4 / 94.4 |  | 12.5 | 9.0 | 22.8 | 107.8 | 301.8 |
+
+## abl_output_target / test
+
+| model | type | params | precision | batch | lr | seeds | accuracy | macro-F1 | acc 2 / 3 readings | other-word change | train time (min) | epochs | GPU p50 | CPU4 p50 | CPU1 p50 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| banglat5 | seq2seq | 247.6M | fp32 | 16x1 | 0.0005 | 3 | 98.28 ± 0.47 | 98.13 ± 0.57 | 98.4 / 88.9 |  | 25.1 | 12.0 | 236.8 | 323.3 | 745.9 |
+
+## lc2 / test
+
+| model | type | params | precision | batch | lr | seeds | accuracy | macro-F1 | acc 2 / 3 readings | other-word change | train time (min) | epochs | GPU p50 | CPU4 p50 | CPU1 p50 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| banglabert_large | encoder | 335.6M | fp16 | 16x2 | 2e-05 | 3 | 94.38 ± 1.33 | 93.85 ± 1.47 | 94.4 / 94.4 |  | 2.3 | 10.0 | 22.8 | 107.8 | 301.8 |
+
 ## main / test
 
 | model | type | params | precision | batch | lr | seeds | accuracy | macro-F1 | acc 2 / 3 readings | other-word change | train time (min) | epochs | GPU p50 | CPU4 p50 | CPU1 p50 |
