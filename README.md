@@ -79,7 +79,8 @@ All models are wrapped by `src.predict.Predictor`, so a checkpoint of any type i
 ## 5. Experiments: what each one means
 
 Every experiment is a **setting** (`SETTINGS` in `src/train.py`) trained with 3 seeds (42, 43, 44) at the model's
-selected learning rate. Results are reported as mean ± std over the seeds. Output: `runs/{model}/{setting}/seed{seed}/`.
+selected learning rate, except the learning curves, which use seed 42 only. Results are reported as mean ± std over
+the seeds. Output: `runs/{model}/{setting}/seed{seed}/`.
 
 | Setting | Question it answers | Models | Results file |
 |---|---|---|---|
@@ -87,18 +88,24 @@ selected learning rate. Results are reported as mean ± std over the seeds. Outp
 | `main` | the benchmark itself: accuracy, macro-F1, per-word accuracy on the main test set | all 12 | `results/summary.md`, `per_word.csv` |
 | `unseen` | can a model handle a heteronym it never saw in training? (only seq2seq and candidate models can, because a classifier has no slots for unknown words) | seq2seq models | `results/summary.md` |
 | `cand_main`, `cand_unseen` | candidate scoring on the main and unseen splits; is it as accurate as the classifier, and does it generalize to unseen words? | 3 best encoders | `results/summary.md`, `latency.csv` |
-| `lc2`, `lc5`, `lc10` | **learning curve**: how many labelled sentences per pronunciation are needed? | all 12 | `results/learning_curve.csv`, `plots/learning_curves.png` |
+| `lc2`, `lc5`, `lc10` | **learning curve**: how many labelled sentences per pronunciation are needed? Seed 42 only | all 12 | `results/learning_curve.csv`, `plots/learning_curves.png` |
 | `abl_marker_special` | marker `<h> word </h>` (new tokens) instead of `@ word @` | BanglaBERT-large | `results/ablations.md` |
 | `abl_marker_none` | no marker at all (the head reads the target word's first token) | BanglaBERT-large | `results/ablations.md` |
 | `abl_head_mean`, `abl_head_cls` | pool the mean of the target's tokens, or `[CLS]`, instead of the opening marker token | BanglaBERT-large | `results/ablations.md` |
 | `abl_output_target`, `abl_output_target_keep` | seq2seq writes only the target's pronunciation instead of the whole sentence (`_keep` is one extra seed whose checkpoint is kept to measure its latency, `runs/banglat5/latency_target.json`) | BanglaT5 | `results/ablations.md`, `latency.csv` |
 
 How to read the learning curve: plot test accuracy against 2 / 5 / 10 / 14 sentences per pronunciation. Where the
-curve flattens (the difference to the next point is within the seed std), more data stops helping; that point is the
-data budget per pronunciation when adding new heteronyms. A curve still rising at 14 means more data would likely help.
+curve flattens (the difference to the next point is within the seed spread of the main runs, about 0.1 to 0.4 points
+for most models), more data stops helping; that point is the data budget per pronunciation when adding new
+heteronyms. A curve still rising at 14 means more data would likely help.
+
+Why only seed 42 for the learning curves (owner, 2026-10-20): the drops from 14 to 2 sentences are 5 to 15 points,
+far larger than the spread between seeds (about 0.6 to 1.3 points at lc2, measured with 3 seeds on 4 models before
+the change), so one seed shows the shape, and it saves about 10 h of GPU time. The point at 14 is the seed-42 main
+run, so the whole curve uses the same seed (`LC_SEED` in `scripts/aggregate.py`). The extra lc2 seeds were deleted.
 
 Why some experiments use only a few models: ablations explain *why* the best setup works, so one strong model is
-enough; candidate scoring and the unseen split concern the models one would deploy (or the only ones that can handle
+enough (the owner decided on 2026-10-20 not to extend them; the no-marker gain is reported as one-model evidence); candidate scoring and the unseen split concern the models one would deploy (or the only ones that can handle
 unseen words). Running every setting for all 12 models would multiply the GPU time without changing the conclusions.
 
 ByT5-small was planned as a 13th model and dropped (2026-10-20): one run took ~7 h on the T4, and its remaining runs
@@ -111,7 +118,8 @@ best inside tmux; logs go to `logs/{model}.log`:
 
 ```bash
 bash scripts/run_model.sh banglabert_small            # or: ... banglabert_small train | measure
-bash scripts/run_setting.sh lc2 banglabert banglat5   # one setting, seeds 42-44, for the listed models
+bash scripts/run_setting.sh cand_main banglabert      # one setting, seeds 42-44, for the listed models
+SEEDS=42 bash scripts/run_setting.sh lc2 banglabert   # learning curves: seed 42 only
 ```
 
 `train` runs the lr search, the 3 seeds and keeps the best checkpoint; `measure` runs the latency benchmark,

@@ -21,6 +21,7 @@ MODELS = [
     ("mt5_base", "~580M"),
 ]
 LEARNING_CURVE = {"lc2": 2, "lc5": 5, "lc10": 10, "main": 14}
+LC_SEED = 42
 # latency file name -> variant label (runs/{model}/latency.json uses the model type)
 LATENCY_VARIANTS = {"latency_cand": "candidate", "latency_target": "target-only"}
 ABLATIONS = {
@@ -167,7 +168,8 @@ def per_word() -> pd.DataFrame:
 
 
 def learning_curve(runs: pd.DataFrame) -> pd.DataFrame:
-    lc = runs[runs["setting"].isin(LEARNING_CURVE) & (runs["test_set"] == "test")]
+    # Learning curves use seed 42 only (owner, 2026-10-20), so the point at 14 is the seed-42 main run.
+    lc = runs[runs["setting"].isin(LEARNING_CURVE) & (runs["test_set"] == "test") & (runs["seed"] == LC_SEED)]
     models_with_curve = set(lc[lc["setting"] != "main"]["model"])
     lc = lc[lc["model"].isin(models_with_curve)]
     rows = []
@@ -250,14 +252,21 @@ def plots(summary: pd.DataFrame, curve: pd.DataFrame, words: pd.DataFrame) -> No
     scatter(main, "cpu4_p50_ms", "CPU p50 latency, batch 1, 4 threads, ms (log scale)", "Accuracy vs. CPU latency", PLOTS / "accuracy_vs_latency_cpu.png")
 
     if not curve.empty:
-        fig, ax = plt.subplots(figsize=(7, 4.5), facecolor=SURFACE)
-        palette = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100"]
-        for color, (model, g) in zip(palette, curve.groupby("model")):
-            ax.errorbar(g["sentences_per_pronunciation"], g["accuracy_mean"] * 100, yerr=g["accuracy_std"].fillna(0) * 100,
-                        color=color, linewidth=2, marker="o", markersize=7, markeredgecolor=SURFACE, label=model)
-        ax.set_xticks(list(LEARNING_CURVE.values()))
-        style(ax, "training sentences per pronunciation", "test accuracy (%)", "Learning curves")
-        ax.legend(frameon=False, fontsize=8, labelcolor=INK_2)
+        models = list(dict.fromkeys(curve["model"]))
+        cols = min(4, len(models))
+        rows = -(-len(models) // cols)
+        fig, axes = plt.subplots(rows, cols, figsize=(3 * cols, 2.4 * rows), facecolor=SURFACE, sharex=True, sharey=True, squeeze=False)
+        for ax, model in zip(axes.flat, models):
+            for other, g in curve.groupby("model"):  # every other model in light gray behind this one
+                if other != model:
+                    ax.plot(g["sentences_per_pronunciation"], g["accuracy_mean"] * 100, color="#c3c2be", linewidth=1)
+            g = curve[curve["model"] == model]
+            ax.plot(g["sentences_per_pronunciation"], g["accuracy_mean"] * 100, color="#2a78d6", linewidth=2, marker="o",
+                    markersize=5, markeredgecolor=SURFACE)
+            ax.set_xticks(list(LEARNING_CURVE.values()))
+            style(ax, "sentences per pronunciation", "test accuracy (%)", model)
+        for ax in axes.flat[len(models):]:
+            ax.set_visible(False)
         fig.tight_layout()
         fig.savefig(PLOTS / "learning_curves.png", dpi=200)
         plt.close(fig)

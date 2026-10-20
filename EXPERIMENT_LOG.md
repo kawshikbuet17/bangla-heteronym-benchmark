@@ -65,6 +65,18 @@ latency goes to `runs/banglat5/latency_target.json` (variant `target-only` in `r
 
 **Next.** Learning curves (started 18:32), candidate scoring, unseen-word split.
 
+### 2026-10-20 19:38: learning curves with seed 42 only
+
+The owner chose one seed for all learning curves. lc2 had already finished with 3 seeds for banglabert_large,
+banglabert and xlm_roberta_large and 2 seeds for banglat5 (seed 44 was running and was stopped); the seed 43/44 runs
+were deleted (never committed). Seed spread at lc2 was 0.6 to 1.3 points against drops of 5 to 15 points from 14 to
+2 sentences, so one seed shows the shape. The point at 14 is now the seed-42 main run (`LC_SEED`), not the 3-seed
+mean. `scripts/run_setting.sh` takes `SEEDS=42`. queue3/queue4 were replaced by queue5 (tmux `hetero-queue5`):
+lc5/lc10 seed 42 for the four started models, cand_main, cand_unseen, unseen seq2seq, the target-only BanglaT5
+checkpoint, lc2/lc5/lc10 seed 42 for the other eight models (mT5-base last), then the latency runs. Estimated end:
+~19:00-20:00 on 2026-10-21. Seed-42 lc2 so far (test accuracy, 2 sentences per reading vs 14): BanglaBERT-large 93.57
+vs 99.09, BanglaBERT 91.94 vs 99.28, XLM-R-large 90.94 vs 98.28, BanglaT5 83.97 vs 98.55.
+
 ### 2026-10-20 19:34: no more ablations
 
 The owner decided against extending the ablations to more models (estimated ~8 h at one seed, ~22 h at three
