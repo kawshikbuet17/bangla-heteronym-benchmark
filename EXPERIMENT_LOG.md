@@ -21,7 +21,7 @@ Latency = batch size 1, full path (normalizer + tokenizer + model + decoding), p
 | 11 | xlm_roberta_large | 559.9M | fp16 | 2e-05 | 98.43 ± 0.19 | 98.34 ± 0.14 | 23.5 | 17.8 | 126.4 | 2157 MB | done |
 | 12 | mt5_base | 582.4M | fp32 | 0.0003 | 96.11 ± 0.16 | 95.99 ± 0.24 | 124.6 | 436.2 | 1758.6 | 2242 MB | done |
 
-Disk used by `checkpoints/`: 13G.
+Disk used by `checkpoints/`: 17G.
 <!-- /results-table -->
 
 ## Observations for the paper
@@ -35,6 +35,22 @@ Disk used by `checkpoints/`: 13G.
   `do_lower_case=False, strip_accents=False`. Anyone using the hub default gets a crippled tokenizer.
 
 ## Entries (newest first)
+
+### 2026-10-21 00:05: cand_main done, XLM-R-large seed 44 collapsed
+
+Candidate scoring on the main test set (mean ± std over seeds 42/43/44), next to the classifier:
+
+| model | candidate | classifier |
+|---|---|---|
+| banglabert_large | 99.73 ± 0.09 | 99.18 ± 0.16 |
+| banglabert | 99.37 ± 0.16 | 99.46 ± 0.16 |
+| xlm_roberta_large | 83.30 ± 23.82 (97.01, 97.10, 55.80) | 98.43 ± 0.19 |
+
+XLM-R-large seed 44 (lr 2e-5) never left the 50% plateau: train loss stayed at ~0.71 (chance for two
+candidates), dev accuracy 57/49/50/50% for epochs 1-4, early stopping after epoch 4. Seed 42 also sat on
+the plateau for 1.5 epochs before it took off, so this is the known large-model fine-tuning instability,
+not a bug. The result is kept as is (no seed replaced). The latency checkpoint is seed 43 (best dev).
+Owner to decide whether the paper reports it with a note or also gives the mean over converged seeds.
 
 ### 2026-10-20 18:40: ablations on banglabert_large (stage 8, encoder part)
 
