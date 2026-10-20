@@ -60,7 +60,9 @@ small; the no-marker gain (0.49 points, about 3 std) is the clearest.
 **banglat5, target-only output** (abl_output_target, 17:15 -> 18:32): 98.28 ± 0.47 accuracy, 98.13 ± 0.57 macro-F1,
 against 98.37 ± 0.18 / 98.37 ± 0.12 for the full-sentence output. Generating only the reading is as accurate within
 noise but less stable across seeds; it produces much shorter outputs, so its latency gain should be measured if it is
-used in practice.
+used in practice. Ablation checkpoints are deleted after evaluation, so one more seed-42 run
+(`abl_output_target_keep`, same settings, checkpoint kept) is queued right after stages 5-8 and before ByT5; its
+latency goes to `runs/banglat5/latency_target.json` (variant `target-only` in `results/latency.csv`).
 
 **Next.** Learning curves (started 18:32), candidate scoring, unseen-word split.
 
