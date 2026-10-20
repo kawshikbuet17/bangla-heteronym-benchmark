@@ -40,6 +40,14 @@ Accuracy and macro-F1 in %, mean ± std over seeds. Latency: batch 1, full path,
 | banglabert_large | candidate | 335.6M | fp16 | 16x2 | 2e-05 | 3 | 99.73 ± 0.09 | 99.72 ± 0.09 | 99.7 / 100.0 |  | 18.7 | 9.3 |  |  |  |
 | xlm_roberta_large | candidate | 559.9M | fp16 | 8x4 | 2e-05 | 3 | 83.30 ± 23.82 | 81.52 ± 26.59 | 83.6 / 64.8 |  | 24.8 | 8.0 |  |  |  |
 
+## cand_unseen / unseen_test
+
+| model | type | params | precision | batch | lr | seeds | accuracy | macro-F1 | acc 2 / 3 readings | other-word change | train time (min) | epochs | GPU p50 | CPU4 p50 | CPU1 p50 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| banglabert | candidate | 110.0M | fp16 | 32x1 | 2e-05 | 3 | 81.02 ± 1.22 | 79.22 ± 1.54 | 81.8 / 62.8 |  | 4.3 | 9.3 |  |  |  |
+| banglabert_large | candidate | 335.6M | fp16 | 16x2 | 2e-05 | 3 | 83.24 ± 2.55 | 81.63 ± 1.94 | 84.0 / 65.0 |  | 13.5 | 8.7 |  |  |  |
+| xlm_roberta_large | candidate | 559.9M | fp16 | 8x4 | 2e-05 | 3 | 62.09 ± 21.18 | 58.93 ± 21.73 | 63.0 / 40.6 |  | 17.9 | 7.3 |  |  |  |
+
 ## lc10 / test
 
 | model | type | params | precision | batch | lr | seeds | accuracy | macro-F1 | acc 2 / 3 readings | other-word change | train time (min) | epochs | GPU p50 | CPU4 p50 | CPU1 p50 |
