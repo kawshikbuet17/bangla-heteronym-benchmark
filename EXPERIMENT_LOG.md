@@ -36,7 +36,7 @@ Disk used by `checkpoints/`: 17G.
 
 ## Entries (newest first)
 
-### 2026-10-21 00:05: cand_main done, XLM-R-large seed 44 collapsed
+### 2026-10-20 23:57: cand_main done, XLM-R-large seed 44 collapsed
 
 Candidate scoring on the main test set (mean ± std over seeds 42/43/44), next to the classifier:
 
@@ -50,7 +50,7 @@ XLM-R-large seed 44 (lr 2e-5) never left the 50% plateau: train loss stayed at ~
 candidates), dev accuracy 57/49/50/50% for epochs 1-4, early stopping after epoch 4. Seed 42 also sat on
 the plateau for 1.5 epochs before it took off, so this is the known large-model fine-tuning instability,
 not a bug. The result is kept as is (no seed replaced). The latency checkpoint is seed 43 (best dev).
-Decision (owner, 2026-10-21): report the mean over all 3 seeds with a note on the collapsed seed (no
+Decision (owner, 2026-10-20 23:58): report the mean over all 3 seeds with a note on the collapsed seed (no
 separate mean over converged seeds).
 
 ### 2026-10-20 18:40: ablations on banglabert_large (stage 8, encoder part)
