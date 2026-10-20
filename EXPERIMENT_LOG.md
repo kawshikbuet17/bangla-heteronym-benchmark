@@ -37,6 +37,21 @@ Disk used by `checkpoints/`: 13G.
 
 ## Entries (newest first)
 
+### 2026-10-20 14:20: stages 5-8 scheduled before the rest of ByT5
+
+At the owner's request (all non-ByT5 results should be in the paper first), the queue pauses byt5_small after its
+running lr-search run (lr 1e-4) is saved and runs stages 5-8 first, with `scripts/run_setting.sh` (3 seeds per
+setting, each model's selected lr, triton containers stopped while training):
+- Ablations on the best encoder by mean dev accuracy over seeds, **banglabert_large** (99.46 vs 99.31 for
+  banglabert): marker `<h> </h>` and none, head mean and [CLS]; and on the best seq2seq model, **banglat5**:
+  target-only output.
+- Learning curves (2/5/10 sentences per reading; 14 is the main run) for the three best encoders by mean dev
+  accuracy (banglabert_large, banglabert, xlm_roberta_large) and banglat5.
+- Candidate scoring for the same three encoders on the main split (best seed kept in `checkpoints/{model}_cand`,
+  latency in `runs/{model}/latency_cand.json`) and on the unseen-word split.
+- Unseen-word split for banglat5, mt5_small and mt5_base.
+Then the rest of ByT5 (4 runs, latency) and ByT5 on the unseen-word split. Estimated ~28 h for stages 5-8.
+
 ### 2026-10-20 07:47: mt5_base (model 13, optional), full cycle
 
 **Run.** Queue (`train` 2026-10-19 20:21 -> 2026-10-20 06:49 with the triton containers stopped; `measure`
