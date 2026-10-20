@@ -34,7 +34,7 @@
   "environment": {
     "dataset": "kawshikbuet17/bangla-heteronyms",
     "dataset_revision": "2c3d86b67571e15ba3520d3d7b11930fb8f34e3a",
-    "git_commit": "3039d81ffc769e30400145ecfb173acd4340332b",
+    "git_commit": "6e127cbb12cbbd4e9b8f372fc6a5505a675a8917",
     "git_dirty": false,
     "python": "3.11.17",
     "packages": {
