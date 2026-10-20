@@ -57,7 +57,12 @@ reading the `@` marker; without markers BanglaBERT-large reaches 99.67%, the bes
 `[CLS]` is the weakest and least stable head. The differences are 1-5 test sentences out of 1,104, so they are
 small; the no-marker gain (0.49 points, about 3 std) is the clearest.
 
-**Next.** banglat5 target-only output (running), then learning curves, candidate scoring, unseen-word split.
+**banglat5, target-only output** (abl_output_target, 17:15 -> 18:32): 98.28 ± 0.47 accuracy, 98.13 ± 0.57 macro-F1,
+against 98.37 ± 0.18 / 98.37 ± 0.12 for the full-sentence output. Generating only the reading is as accurate within
+noise but less stable across seeds; it produces much shorter outputs, so its latency gain should be measured if it is
+used in practice.
+
+**Next.** Learning curves (started 18:32), candidate scoring, unseen-word split.
 
 ### 2026-10-20 14:20: stages 5-8 scheduled before the rest of ByT5
 
