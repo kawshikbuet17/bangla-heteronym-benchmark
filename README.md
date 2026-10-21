@@ -366,7 +366,8 @@ Input rules:
 
 Which checkpoint: `checkpoints/banglabert` is the most accurate classifier (99.46%, ~12.5 ms on the T4, ~33 ms on 4 CPU
 threads); `checkpoints/banglabert_small` is the fastest on a CPU (98.16%, 13 ms); `checkpoints/banglabert_large_cand`
-(candidate scoring) is the most accurate (99.73%) but about twice as slow. All are used the same way.
+(candidate scoring) is the most accurate (99.73%) but about 2 times slower on the GPU (23.8 ms) and 4 times slower on a CPU
+(139 ms). All are used the same way.
 
 `phoneticize` splits the text on `।`, `?`, `!` and newlines, finds every whole-word occurrence of a known
 heteronym, marks one occurrence at a time, predicts all of them in one batch and rebuilds the exact text.
