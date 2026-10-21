@@ -21,10 +21,12 @@ reader = bhp.get_reader()                                     # the same reader 
 reader.phoneticize("আগে কর কাজটা, তারপর আবার কর।")             # 'আগে কোরো কাজটা, তারপর আবার করো।'
 reader.predict("সময়মতো কর না দিলে জরিমানা গুনতে হবে।", "কর")     # 'কর্‌'
 reader.predict_marked("সরকার কর বাড়িয়েছে, তাই হিসাবটা আবার [কর]।")  # 'করো'
+reader.phoneticize_marked("সরকার কর বাড়িয়েছে, তাই হিসাবটা আবার [কর]।")  # 'সরকার কর বাড়িয়েছে, তাই হিসাবটা আবার করো।'
 
 reader.phoneticize_batch([text1, text2])                      # lists in, lists out, one model call per 64 words
 reader.predict_batch([(sentence1, "কর"), (sentence2, "বল")])
 reader.predict_marked_batch([marked1, marked2])
+reader.phoneticize_marked_batch([marked1, marked2])
 ```
 
 `demo.py` calls every method and shows its output: `python -m bangla_heteronym_package.demo /abs/path/checkpoints/banglabert`.
@@ -33,7 +35,8 @@ reader.predict_marked_batch([marked1, marked2])
 |---|---|---|
 | `phoneticize(text)` | any text | the text with every heteronym replaced by its reading |
 | `predict(sentence, word)` | a sentence and a heteronym in it | the reading of its first occurrence |
-| `predict_marked(text, marks=("[", "]"))` | text with one heteronym marked, `[কর]` | the reading of the marked word |
+| `predict_marked(text, marks=("[", "]"))` | text with a heteronym marked, `[কর]` | the reading of the marked word |
+| `phoneticize_marked(text, marks=("[", "]"))` | text with one or more heteronyms marked | the text with only the marked words replaced and the marks removed |
 | `*_batch(list)` | a list of the above | a list of the above |
 | `heteronyms` | | dict: each heteronym and its readings |
 
@@ -83,8 +86,9 @@ They are read from the environment, else from `.env` in this folder. A path or d
 
 ## Input rules
 
-- Plain Unicode Bangla. Mark a word only when it occurs more than once and you want a specific occurrence: `[কর]`,
-  no spaces inside the marks, one marked word per text.
+- Plain Unicode Bangla. Mark a word when you want only that occurrence read: `[কর]`, no spaces inside the marks.
+  `predict_marked` reads the first marked word; `phoneticize_marked` replaces every marked word.
+- Do not pass marked text to `phoneticize`: it reads every heteronym and keeps the marks as punctuation.
 - A word that is not one of the 183 heteronyms, or not in the text, raises `ValueError` (in `predict` and
   `predict_marked`); `phoneticize` leaves all other words unchanged.
 - Paragraphs are fine: each heteronym is read from its own sentence (split at `।`, `?`, `!` and newlines).

@@ -50,14 +50,34 @@ class HeteronymModelReader(HeteronymReader):
     def predict_marked_batch(self, texts: list[str], marks: tuple[str, str] = ("[", "]")) -> list[str]:
         items = []
         for text in texts:
-            start = text.find(marks[0])
-            end = text.find(marks[1], start + 1) if start >= 0 else -1
-            if end < 0:
-                raise ValueError(f"mark the heteronym as {marks[0]}word{marks[1]}: {text!r}")
-            word = text[start + len(marks[0]):end]
-            self._check(word)
-            items.append(sentence_item(text[:start] + word + text[end + len(marks[1]):], start, start + len(word)))
+            plain, spans = self._unmark(text, marks)
+            items.append(sentence_item(plain, *spans[0]))  # the first marked word
         return self._read(items)
+
+    def phoneticize_marked_batch(self, texts: list[str], marks: tuple[str, str] = ("[", "]")) -> list[str]:
+        found = []  # (text index, start, end) of every marked word, in the text without marks
+        out = []
+        for t, text in enumerate(texts):
+            plain, spans = self._unmark(text, marks)
+            out.append(plain)
+            found += [(t, start, end) for start, end in spans]
+        readings = self._read([sentence_item(out[t], start, end) for t, start, end in found])
+        for (t, start, end), reading in reversed(list(zip(found, readings))):
+            out[t] = out[t][:start] + reading + out[t][end:]
+        return out
+
+    def _unmark(self, text: str, marks: tuple[str, str]) -> tuple[str, list[tuple[int, int]]]:
+        """The text without marks and the span of each marked word in it; every marked word must be a heteronym."""
+        plain, spans, pos = "", [], 0
+        for m in re.finditer(re.escape(marks[0]) + "(.*?)" + re.escape(marks[1]), text):
+            self._check(m.group(1))
+            plain += text[pos:m.start()]
+            spans.append((len(plain), len(plain) + len(m.group(1))))
+            plain += m.group(1)
+            pos = m.end()
+        if not spans:
+            raise ValueError(f"mark the heteronym as {marks[0]}word{marks[1]}: {text!r}")
+        return plain + text[pos:], spans
 
     def _check(self, word: str) -> None:
         if word not in self.heteronyms:

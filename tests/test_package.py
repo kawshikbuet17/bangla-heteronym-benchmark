@@ -55,6 +55,16 @@ def test_marked_occurrence_is_read_in_its_own_sentence():
     assert reader.predict_marked("তুমি <<বল>> আনো।", marks=("<<", ">>")) == first("বল")
 
 
+def test_phoneticize_marked_replaces_only_marked_words_and_removes_marks():
+    reader = FakeReader()
+    texts = ["আগে কর কাজটা, তারপর আবার [কর]। [বল] আনো।", "তুমি <<আঁক>>।"]
+    assert reader.phoneticize_marked_batch(texts[:1]) == [f"আগে কর কাজটা, তারপর আবার {first('কর')}। {first('বল')} আনো।"]
+    assert len(reader.calls) == 1 and [i[0] for i in reader.calls[0]] == ["আগে কর কাজটা, তারপর আবার কর।", " বল আনো।"]
+    assert reader.phoneticize_marked(texts[1], marks=("<<", ">>")) == f"তুমি {first('আঁক')}।"
+    with pytest.raises(ValueError):
+        reader.phoneticize_marked("আবার কর।")
+
+
 def test_errors():
     reader = FakeReader()
     for bad in (lambda: reader.predict_marked("কোনো চিহ্ন নেই"), lambda: reader.predict_marked("এটা [তালিকায়] নেই"),
@@ -106,6 +116,8 @@ def test_same_output_as_benchmark_predictor(name):
     assert reader.predict_batch(pairs) == predictor.predict_batch(pairs)
     marked = ["সরকার কর বাড়িয়েছে, তাই হিসাবটা আবার [কর]।", "তুমি গ্রাফ পেপারে সরলরেখাটা [আঁক]।"]
     assert reader.predict_marked_batch(marked) == predictor.predict_marked_batch(marked) == [reader.predict_marked(m) for m in marked]
+    marked_texts = ["সরকার [কর] বাড়িয়েছে, তাই হিসাবটা আবার [কর]। বিকেলে মাঠে [বল] নিয়ে যাব।", "তুমি গ্রাফ পেপারে সরলরেখাটা [আঁক]।"]
+    assert reader.phoneticize_marked_batch(marked_texts) == predictor.phoneticize_marked_batch(marked_texts)
 
 
 def test_no_batch_support_warns_and_runs_one_at_a_time(monkeypatch):

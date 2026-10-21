@@ -166,20 +166,42 @@ class Predictor:
     def predict(self, sentence: str, word: str) -> str:
         return self.predict_batch([(sentence, word)])[0]
 
+    def unmark(self, text: str, marks: tuple[str, str]) -> tuple[str, list[tuple[int, int]]]:
+        """The text without marks and the span of each marked word in it; every marked word must be a heteronym."""
+        plain, spans, pos = "", [], 0
+        for m in re.finditer(re.escape(marks[0]) + "(.*?)" + re.escape(marks[1]), text):
+            self.check_word(m.group(1))
+            plain += text[pos:m.start()]
+            spans.append((len(plain), len(plain) + len(m.group(1))))
+            plain += m.group(1)
+            pos = m.end()
+        if not spans:
+            raise ValueError(f"mark the heteronym as {marks[0]}word{marks[1]}: {text!r}")
+        return plain + text[pos:], spans
+
     def predict_marked_batch(self, texts: list[str], marks: tuple[str, str] = ("[", "]")) -> list[str]:
-        """Reading of the one heteronym written between the marks in each text, e.g. "আগে কর কাজটা, তারপর আবার [কর]।".
+        """Reading of the (first) heteronym written between the marks in each text, e.g. "আগে কর কাজটা, তারপর আবার [কর]।".
         Only the sentence that contains the mark is given to the model, as in phoneticize."""
         items = []
         for text in texts:
-            start = text.find(marks[0])
-            end = text.find(marks[1], start + len(marks[0])) if start >= 0 else -1
-            if start < 0 or end < 0:
-                raise ValueError(f"mark the heteronym as {marks[0]}word{marks[1]}: {text!r}")
-            word = text[start + len(marks[0]):end]
-            self.check_word(word)
-            plain = text[:start] + word + text[end + len(marks[1]):]
-            items.append(sentence_item(plain, start, start + len(word)))
+            plain, spans = self.unmark(text, marks)
+            items.append(sentence_item(plain, *spans[0]))
         return [p.pronunciation for p in self.predict_items(items)]
+
+    def phoneticize_marked_batch(self, texts: list[str], marks: tuple[str, str] = ("[", "]")) -> list[str]:
+        """Each text with only its marked heteronyms replaced and the marks removed."""
+        found, out = [], []
+        for t, text in enumerate(texts):
+            plain, spans = self.unmark(text, marks)
+            out.append(plain)
+            found += [(t, start, end) for start, end in spans]
+        predictions = self.predict_items([sentence_item(out[t], start, end) for t, start, end in found])
+        for (t, start, end), p in reversed(list(zip(found, predictions))):
+            out[t] = out[t][:start] + (p.pronunciation or out[t][start:end]) + out[t][end:]
+        return out
+
+    def phoneticize_marked(self, text: str, marks: tuple[str, str] = ("[", "]")) -> str:
+        return self.phoneticize_marked_batch([text], marks)[0]
 
     def predict_marked(self, text: str, marks: tuple[str, str] = ("[", "]")) -> str:
         return self.predict_marked_batch([text], marks)[0]

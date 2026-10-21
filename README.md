@@ -336,6 +336,7 @@ reader = bhp.initialize("/abs/path/checkpoints/banglabert")   # once; bhp.get_re
 reader.phoneticize(text)                       # reader.phoneticize_batch([text, ...])
 reader.predict(sentence, "কর")                 # reader.predict_batch([(sentence, "কর"), ...])
 reader.predict_marked("... আবার [কর]।")         # reader.predict_marked_batch([...])
+reader.phoneticize_marked("... আবার [কর]।")     # whole text, only marked words replaced; reader.phoneticize_marked_batch([...])
 ```
 
 #### Batch inference (all models)
@@ -392,6 +393,7 @@ Three ways to call it:
 | any text, nothing marked | `p.phoneticize(text)` | the same text with **every** known heteronym replaced by its reading |
 | a sentence and the word, the word occurs once | `p.predict(sentence, "কর")` | only the reading of that word (its first occurrence) |
 | a sentence with the target marked | `p.predict_marked("... [কর] ...")` | only the reading of the marked occurrence |
+| a text with one or more words marked | `p.phoneticize_marked("... [কর] ...")` | the whole text, only the marked words replaced, marks removed |
 
 ```python
 p.phoneticize("আগে কর কাজটা, তারপর আবার কর। বিকেলে মাঠে বল নিয়ে যাব।")
@@ -415,7 +417,8 @@ Input rules:
 - `p.phoneticize_detailed(text)` also returns, per heteronym, its character position, reading and confidence, and
   `p.predict_items([(sentence, start, end, word)])` takes character offsets if you locate the words yourself.
 - Every call has a batch version that takes and returns lists: `p.phoneticize_batch(texts)`,
-  `p.phoneticize_detailed_batch(texts)`, `p.predict_batch([(sentence, word), ...])`, `p.predict_marked_batch(texts)`.
+  `p.phoneticize_detailed_batch(texts)`, `p.predict_batch([(sentence, word), ...])`, `p.predict_marked_batch(texts)`,
+  `p.phoneticize_marked_batch(texts)`.
   All occurrences go through the model together (64 per forward pass), which is about 10 times faster on the GPU than
   a loop of single calls.
 

@@ -16,6 +16,10 @@ class HeteronymReader(ABC):
     def predict_marked_batch(self, texts: list[str], marks: tuple[str, str] = ("[", "]")) -> list[str]:
         """Texts with one heteronym marked, e.g. "আবার [কর]।" -> the reading of the marked word."""
 
+    @abstractmethod
+    def phoneticize_marked_batch(self, texts: list[str], marks: tuple[str, str] = ("[", "]")) -> list[str]:
+        """Each text with only its marked heteronyms replaced (and the marks removed), e.g. "আবার [কর]।" -> "আবার করো।"."""
+
     def phoneticize(self, text: str) -> str:
         return self.phoneticize_batch([text])[0]
 
@@ -24,3 +28,6 @@ class HeteronymReader(ABC):
 
     def predict_marked(self, text: str, marks: tuple[str, str] = ("[", "]")) -> str:
         return self.predict_marked_batch([text], marks)[0]
+
+    def phoneticize_marked(self, text: str, marks: tuple[str, str] = ("[", "]")) -> str:
+        return self.phoneticize_marked_batch([text], marks)[0]

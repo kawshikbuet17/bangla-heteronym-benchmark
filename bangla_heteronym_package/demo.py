@@ -48,12 +48,22 @@ print(reader.predict_marked("মাঠে যাওয়ার সময় <<�
 print(*reader.predict_marked_batch(["সরকার [কর] বাড়িয়েছে, তাই হিসাবটা আবার কর।", "সরকার কর বাড়িয়েছে, তাই হিসাবটা আবার [কর]।"]))
 # -> কর্‌ করো
 
-# 10. Wrong input raises ValueError
+# 10. Marked text in, whole text out: only the marked words are replaced, the marks are removed
+print(reader.phoneticize_marked("সরকার কর বাড়িয়েছে, তাই হিসাবটা আবার [কর]।"))
+# -> সরকার কর বাড়িয়েছে, তাই হিসাবটা আবার করো।
+
+# 11. Many marked texts in one call; a text can have several marked words
+for text in reader.phoneticize_marked_batch(["সরকার [কর] বাড়িয়েছে, তাই হিসাবটা আবার [কর]।", "মাঠে যাওয়ার সময় [বল] নিয়ে যেও।"]):
+    print(text)
+# -> সরকার কর্‌ বাড়িয়েছে, তাই হিসাবটা আবার করো।
+# -> মাঠে যাওয়ার সময় বল্‌ নিয়ে যেও।
+
+# 12. Wrong input raises ValueError
 try:
     reader.predict("আমি ভাত খাই।", "ভাত")
 except ValueError as error:
     print(error)
 # -> 'ভাত' is not one of the 183 known heteronyms
 
-# 11. To load another model: reset(), then initialize() with the other path
+# 13. To load another model: reset(), then initialize() with the other path
 bhp.reset()

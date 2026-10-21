@@ -110,3 +110,10 @@ def test_batch_methods_make_one_predict_items_call():
     assert predictor.predict_batch([("কর দাও", "কর"), ("বল নিয়ে এসো", "বল")]) == [first("কর"), first("বল")]
     assert predictor.predict_marked_batch(["আবার [কর]।", "[বল] আনো।"]) == [first("কর"), first("বল")]
     assert [len(c) for c in predictor.calls] == [2, 2]
+
+
+def test_phoneticize_marked_replaces_only_marked_words():
+    predictor = FakePredictor()
+    out = predictor.phoneticize_marked_batch(["আগে কর কাজটা, তারপর আবার [কর]। [বল] আনো।", "আবার [কর]।"])
+    assert out == [f"আগে কর কাজটা, তারপর আবার {first('কর')}। {first('বল')} আনো।", f"আবার {first('কর')}।"]
+    assert len(predictor.calls) == 1 and len(predictor.calls[0]) == 3
