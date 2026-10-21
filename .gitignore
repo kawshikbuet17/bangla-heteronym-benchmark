@@ -12,3 +12,6 @@ __pycache__/
 bangla-heteronym-benchmark-paper/
 scripts/paper_assets.py
 scripts/paper_bangla.py
+
+# Local settings of the copyable package
+bangla_heteronym_package/.env

@@ -321,23 +321,56 @@ out: বিকেলে তুমি পার্কে খ্যালো, স�
 
 Words that are not in the heteronym list (here আঁচড়াত, খেলব) are never changed.
 
-### Copyable package: `bangla_heteronym_maker/`
+### Copyable package: `bangla_heteronym_package/`
 
-For use in another project, copy the folder `bangla_heteronym_maker/` (self-contained, only relative imports, no
-dependency on `src/`) and a checkpoint folder. It has an interface (`HeteronymReader`), its implementation
-(`HeteronymModelReader`), a singleton `initialize(path)` / `get_reader()`, single and batch methods, a demo
-(`python -m bangla_heteronym_maker.demo /abs/path/checkpoints/banglabert`) and its own
-[README](bangla_heteronym_maker/README.md). `tests/test_package.py` checks that it gives exactly the same output as
-`src.predict.Predictor` for an encoder, a candidate and a seq2seq checkpoint.
+For use in another project, copy the folder `bangla_heteronym_package/` (self-contained, no dependency on `src/`) and
+a checkpoint folder. It has an interface (`HeteronymReader`), its implementation (`HeteronymModelReader`), a
+singleton `initialize(path)` / `get_reader()`, single and batch methods, settings from environment variables or a
+`.env` file (`.env.example`), a demo with its outputs (`demo.py`) and its own [README](bangla_heteronym_package/README.md).
+`tests/test_package.py` checks that it gives exactly the same output as `src.predict.Predictor` for an encoder, a
+candidate and a seq2seq checkpoint.
 
 ```python
-import bangla_heteronym_maker as bhm
-reader = bhm.initialize("/abs/path/checkpoints/banglabert")             # once; bhm.get_reader() elsewhere
-reader.phoneticize(text)                     # reader.phoneticize_batch([text, ...])
-reader.predict(sentence, "কর")               # reader.predict_batch([(sentence, "কর"), ...])
-reader.predict_marked("... আবার [কর]।")       # reader.predict_marked_batch([...])
-reader.readings(text)                        # reader.readings_batch([...]): word, position, reading, confidence
+import bangla_heteronym_package as bhp
+reader = bhp.initialize("/abs/path/checkpoints/banglabert")   # once; bhp.get_reader() elsewhere
+reader.phoneticize(text)                       # reader.phoneticize_batch([text, ...])
+reader.predict(sentence, "কর")                 # reader.predict_batch([(sentence, "কর"), ...])
+reader.predict_marked("... আবার [কর]।")         # reader.predict_marked_batch([...])
 ```
+
+#### Batch inference (all models)
+
+Every benchmark model supports batch inference: encoder classifiers, candidate scorers and seq2seq models all run on
+padded batches (64 heteronym occurrences per model call in the `*_batch` methods). Measured GPU throughput on a Tesla
+T4 (full path, 200 test sentences):
+
+| Model | Checkpoint | Type | Batch inference | Sentences/s, batch 1 | Sentences/s, batch 32 |
+|---|---|---|---|---|---|
+| BanglaBERT-small | `checkpoints/banglabert_small` | encoder classifier | yes | 77 | 1488 |
+| BanglaBERT | `checkpoints/banglabert` | encoder classifier | yes | 79 | 1500 |
+| Bangla-BERT-base | `checkpoints/bangla_bert_base` | encoder classifier | yes | 89 | 2068 |
+| MuRIL-base | `checkpoints/muril_base` | encoder classifier | yes | 96 | 1976 |
+| XLM-R-base | `checkpoints/xlm_roberta_base` | encoder classifier | yes | 94 | 1845 |
+| IndicBERTv2-MLM | `checkpoints/indicbertv2_mlm` | encoder classifier | yes | 89 | 1972 |
+| mDeBERTa-v3-base | `checkpoints/mdeberta_v3_base` | encoder classifier | yes | 38 | 235 |
+| BanglaBERT-large | `checkpoints/banglabert_large` | encoder classifier | yes | 43 | 820 |
+| XLM-R-large | `checkpoints/xlm_roberta_large` | encoder classifier | yes | 55 | 668 |
+| BanglaT5 | `checkpoints/banglat5` | seq2seq | yes | 4 | 67 |
+| mT5-small | `checkpoints/mt5_small` | seq2seq | yes | 3 | 42 |
+| mT5-base | `checkpoints/mt5_base` | seq2seq | yes | 2 | 24 |
+| BanglaBERT | `checkpoints/banglabert_cand` | candidate scorer | yes | 71 | 1001 |
+| BanglaBERT-large | `checkpoints/banglabert_large_cand` | candidate scorer | yes | 41 | 327 |
+| XLM-R-large | `checkpoints/xlm_roberta_large_cand` | candidate scorer | yes | 49 | 306 |
+| BanglaT5 target-only | `checkpoints/_runs/banglat5/abl_output_target_keep/seed42` | seq2seq | yes | 12 | 205 |
+
+If a checkpoint does not support batching (a model type not listed above, or `"batch": false` in its
+`heteronym_config.json`), the package prints a warning when loading it
+
+```
+UserWarning: <checkpoint> does not support batch inference; the *_batch methods will process their inputs one at a time
+```
+
+and the `*_batch` methods still work, one input at a time. `reader.supports_batch` tells which case applies.
 
 ### Using it from another project (without the package)
 
@@ -366,7 +399,7 @@ p.phoneticize("আগে কর কাজটা, তারপর আবার �
 
 p.predict("সময়মতো কর না দিলে জরিমানা গুনতে হবে।", "কর")             # 'কর্‌'
 p.predict_marked("সরকার কর বাড়িয়েছে, তাই হিসাবটা আবার [কর]।")       # 'করো'  (the second কর; predict() would read the first)
-p.predict_marked("তুমি <<বল>> নিয়ে এসো।", marks=("<<", ">>"))        # other marks if [ ] can occur in your text
+p.predict_marked("মাঠে যাওয়ার সময় <<বল>> নিয়ে যেও।", marks=("<<", ">>"))  # বল্‌; other marks if [ ] can occur
 ```
 
 Input rules:
@@ -536,7 +569,7 @@ requirements/   pinned packages per model
 src/            data, splits, models, train, evaluate, predict, benchmark_latency, env
 scripts/        run_model.sh, run_setting.sh, smoke.sh, env.sh, select_lr, keep_best, aggregate,
                 write_requirements, check_tokenizers
-bangla_heteronym_maker/   copyable inference package (interface, implementation, singleton, demo, README)
+bangla_heteronym_package/  copyable inference package (interface, implementation, singleton, demo, README, .env.example)
 tests/          phoneticize, package and data tests
 data/splits/    the fixed splits;  data/latency_*: latency inputs
 runs/           per-run config/metrics/predictions/train logs, latency*.json, phoneticize demos
