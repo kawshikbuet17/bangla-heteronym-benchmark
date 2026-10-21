@@ -30,29 +30,29 @@ Accuracy and macro-F1 in %, mean ± std over seeds. Latency: batch 1, full path,
 
 | model | type | params | precision | batch | lr | seeds | accuracy | macro-F1 | acc 2 / 3 readings | other-word change | train time (min) | epochs | GPU p50 | CPU4 p50 | CPU1 p50 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| banglat5 | seq2seq | 247.6M | fp32 | 16x1 | 0.0005 | 3 | 98.28 ± 0.47 | 98.13 ± 0.57 | 98.4 / 88.9 |  | 25.1 | 12.0 |  |  |  |
+| banglat5 | seq2seq | 247.6M | fp32 | 16x1 | 0.0005 | 3 | 98.28 ± 0.47 | 98.13 ± 0.57 | 98.4 / 88.9 |  | 25.1 | 12.0 | 86.1 | 126.2 | 279.1 |
 
 ## abl_output_target_keep / test
 
 | model | type | params | precision | batch | lr | seeds | accuracy | macro-F1 | acc 2 / 3 readings | other-word change | train time (min) | epochs | GPU p50 | CPU4 p50 | CPU1 p50 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| banglat5 | seq2seq | 247.6M | fp32 | 16x1 | 0.0005 | 1 | 98.82 | 98.78 | 98.9 / 94.4 |  | 30.1 | 15.0 |  |  |  |
+| banglat5 | seq2seq | 247.6M | fp32 | 16x1 | 0.0005 | 1 | 98.82 | 98.78 | 98.9 / 94.4 |  | 30.1 | 15.0 | 86.1 | 126.2 | 279.1 |
 
 ## cand_main / test
 
 | model | type | params | precision | batch | lr | seeds | accuracy | macro-F1 | acc 2 / 3 readings | other-word change | train time (min) | epochs | GPU p50 | CPU4 p50 | CPU1 p50 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| banglabert | candidate | 110.0M | fp16 | 32x1 | 2e-05 | 3 | 99.37 ± 0.16 | 99.34 ± 0.17 | 99.4 / 98.1 |  | 5.6 | 9.3 |  |  |  |
-| banglabert_large | candidate | 335.6M | fp16 | 16x2 | 2e-05 | 3 | 99.73 ± 0.09 | 99.72 ± 0.09 | 99.7 / 100.0 |  | 18.7 | 9.3 |  |  |  |
-| xlm_roberta_large | candidate | 559.9M | fp16 | 8x4 | 2e-05 | 3 | 83.30 ± 23.82 | 81.52 ± 26.59 | 83.6 / 64.8 |  | 24.8 | 8.0 |  |  |  |
+| banglabert | candidate | 110.0M | fp16 | 32x1 | 2e-05 | 3 | 99.37 ± 0.16 | 99.34 ± 0.17 | 99.4 / 98.1 |  | 5.6 | 9.3 | 13.6 | 44.1 | 125.8 |
+| banglabert_large | candidate | 335.6M | fp16 | 16x2 | 2e-05 | 3 | 99.73 ± 0.09 | 99.72 ± 0.09 | 99.7 / 100.0 |  | 18.7 | 9.3 | 23.8 | 138.9 | 423.3 |
+| xlm_roberta_large | candidate | 559.9M | fp16 | 8x4 | 2e-05 | 3 | 83.30 ± 23.82 | 81.52 ± 26.59 | 83.6 / 64.8 |  | 24.8 | 8.0 | 19.9 | 174.6 | 579.0 |
 
 ## cand_unseen / unseen_test
 
 | model | type | params | precision | batch | lr | seeds | accuracy | macro-F1 | acc 2 / 3 readings | other-word change | train time (min) | epochs | GPU p50 | CPU4 p50 | CPU1 p50 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| banglabert | candidate | 110.0M | fp16 | 32x1 | 2e-05 | 3 | 81.02 ± 1.22 | 79.22 ± 1.54 | 81.8 / 62.8 |  | 4.3 | 9.3 |  |  |  |
-| banglabert_large | candidate | 335.6M | fp16 | 16x2 | 2e-05 | 3 | 83.24 ± 2.55 | 81.63 ± 1.94 | 84.0 / 65.0 |  | 13.5 | 8.7 |  |  |  |
-| xlm_roberta_large | candidate | 559.9M | fp16 | 8x4 | 2e-05 | 3 | 62.09 ± 21.18 | 58.93 ± 21.73 | 63.0 / 40.6 |  | 17.9 | 7.3 |  |  |  |
+| banglabert | candidate | 110.0M | fp16 | 32x1 | 2e-05 | 3 | 81.02 ± 1.22 | 79.22 ± 1.54 | 81.8 / 62.8 |  | 4.3 | 9.3 | 13.6 | 44.1 | 125.8 |
+| banglabert_large | candidate | 335.6M | fp16 | 16x2 | 2e-05 | 3 | 83.24 ± 2.55 | 81.63 ± 1.94 | 84.0 / 65.0 |  | 13.5 | 8.7 | 23.8 | 138.9 | 423.3 |
+| xlm_roberta_large | candidate | 559.9M | fp16 | 8x4 | 2e-05 | 3 | 62.09 ± 21.18 | 58.93 ± 21.73 | 63.0 / 40.6 |  | 17.9 | 7.3 | 19.9 | 174.6 | 579.0 |
 
 ## lc10 / test
 
