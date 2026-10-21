@@ -36,6 +36,20 @@ Disk used by `checkpoints/`: 18G.
 
 ## Entries (newest first)
 
+### 2026-10-21 17:40: all experiments finished (queue5 done, no failures)
+
+Learning curves for all 12 models (seed 42) finished at 16:50, then latency for the 3 candidate scorers and the
+BanglaT5 target-only model, and aggregation (17:16). The triton containers are up again and healthy.
+
+- mT5 learning curves: mT5-small 52.72 / 81.70 / 92.66 at 2 / 5 / 10 per reading; mT5-base 80.98 / 92.03 / 95.47.
+- Latency (GPU p50, ms): candidate scorers 13.6 (BanglaBERT), 23.8 (BanglaBERT-large), 19.9 (XLM-R-large), about
+  1 ms above their classifiers. BanglaT5 target-only 86.1 ms vs 236.8 ms for the full sentence (CPU 4 threads
+  126.2 vs 323.3).
+- Unseen split, seq2seq: only 68-74% of outputs are one of the word's readings (the rest invent a pronunciation);
+  of those, 76-81% are correct. The candidate scorer is limited to the readings, hence 81-83%.
+
+All results are in results/ and the README results section.
+
 ### 2026-10-21 11:55: cand_unseen, unseen seq2seq and target-only checkpoint done
 
 Unseen-word split (37 test words never seen in training), test accuracy, mean ± std over seeds 42/43/44:

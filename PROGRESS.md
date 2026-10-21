@@ -9,16 +9,16 @@ Spec: PROMPTS.md. GPU: T4 = `CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=1
    - [x] banglabert  - [x] bangla-bert-base  - [x] muril  - [x] banglat5  - [x] xlm-roberta-base
    - [x] IndicBERTv2  - [x] mdeberta  - [x] mt5-small  - [-] byt5-small (dropped by owner 2026-10-20 18:55)  - [x] banglabert_large
    - [x] xlm-roberta-large  - [x] mt5-base (optional)
-5. [ ] Candidate scoring: best 3 encoders, main + unseen split, latency. Commit.
+5. [x] Candidate scoring: best 3 encoders, main + unseen split, latency. Commit.
    cand_main done. XLM-R-large seed 44 collapsed (55.8%); report 3-seed mean + note, no extra mean (owner, 2026-10-20). README note at stage 9.
-6. [ ] Unseen-word split: seq2seq x 3 seeds. Commit.
-7. [ ] Learning curve 2/5/10/14: all 12 models, seed 42 only (owner, 2026-10-20 19:38; extra lc2 seeds deleted). Commit.
+6. [x] Unseen-word split: seq2seq x 3 seeds. Commit.
+7. [x] Learning curve 2/5/10/14: all 12 models, seed 42 only (owner, 2026-10-20 19:38; extra lc2 seeds deleted). Commit.
    Order (queue5, tmux hetero-queue5): lc5/lc10 for the 4 started models, stages 5/6, target-only ckpt, then the other 8 (mT5-base last).
    Results are committed automatically after every finished queue step (scratchpad/autocommit.sh).
-8. [ ] Ablations. Commit.
+8. [x] Ablations. Commit.
    Final set (owner, 2026-10-20 19:34, no more ablations): banglabert_large x4 + banglat5 target-only, 3 seeds, done.
-   Remaining: target-only latency (queue4).
-9. [ ] Final aggregation + summary table. Commit.
+   Target-only latency done (queue5, 2026-10-21 17:16).
+9. [x] Final aggregation + summary table. Commit. queue5 finished 2026-10-21 17:16 (no failures), README results updated.
    Note: xlm_roberta_large + mt5_base need triton containers on T4 stopped (user allowed); restart after.
    Queue: tmux session hetero-queue (script in session scratchpad), log logs/queue.log; per model: log entry + commit.
    Order change (user, 2026-10-19 15:47): byt5_small stopped, runs after banglabert_large, xlm_roberta_large, mt5_base.
