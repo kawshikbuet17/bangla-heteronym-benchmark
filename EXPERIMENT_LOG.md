@@ -21,7 +21,7 @@ Latency = batch size 1, full path (normalizer + tokenizer + model + decoding), p
 | 11 | xlm_roberta_large | 559.9M | fp16 | 2e-05 | 98.43 ± 0.19 | 98.34 ± 0.14 | 23.5 | 17.8 | 126.4 | 2157 MB | done |
 | 12 | mt5_base | 582.4M | fp32 | 0.0003 | 96.11 ± 0.16 | 95.99 ± 0.24 | 124.6 | 436.2 | 1758.6 | 2242 MB | done |
 
-Disk used by `checkpoints/`: 17G.
+Disk used by `checkpoints/`: 18G.
 <!-- /results-table -->
 
 ## Observations for the paper
@@ -35,6 +35,26 @@ Disk used by `checkpoints/`: 17G.
   `do_lower_case=False, strip_accents=False`. Anyone using the hub default gets a crippled tokenizer.
 
 ## Entries (newest first)
+
+### 2026-10-21 11:55: cand_unseen, unseen seq2seq and target-only checkpoint done
+
+Unseen-word split (37 test words never seen in training), test accuracy, mean ± std over seeds 42/43/44:
+
+| model | approach | unseen test |
+|---|---|---|
+| banglabert_large | candidate | 83.24 ± 2.55 (85.93, 82.93, 80.87) |
+| banglabert | candidate | 81.02 ± 1.22 |
+| xlm_roberta_large | candidate | 62.09 ± 21.18 (50.47, 49.27, 86.53) |
+| banglat5 | seq2seq | 55.09 ± 1.85 |
+| mt5_small | seq2seq | 51.69 ± 0.63 |
+| mt5_base | seq2seq | 58.07 ± 0.88 |
+
+XLM-R-large collapsed again: seeds 42 and 43 stayed at train loss ~0.70 and dev ~50% for every epoch until
+early stopping; seed 44 trained normally (dev 96.5%). Reported as the 3-seed mean with a note, as decided for
+cand_main. The seq2seq models are close to the two-reading chance level on unseen words, the candidate scorers
+lose 16-18 points against the main split. BanglaT5 target-only (seed 42, checkpoint for latency): 98.82%.
+Learning curves for 6 of the 8 remaining models done by 11:50 (much faster than estimated); mT5-small and
+mT5-base remain.
 
 ### 2026-10-20 23:57: cand_main done, XLM-R-large seed 44 collapsed
 
