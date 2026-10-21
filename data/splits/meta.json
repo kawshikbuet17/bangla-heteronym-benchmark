@@ -1,5 +1,5 @@
 {
-  "dataset_revision": "2c3d86b67571e15ba3520d3d7b11930fb8f34e3a",
+  "dataset_revision": "a57c21fdc75a6e0f038960638c1265f8fd9ac00f",
   "seed": 42,
   "unseen_words": [
     "কর",
@@ -39,5 +39,7 @@
     "রব",
     "লড়ে",
     "সরে"
-  ]
+  ],
+  "created_from_revision": "2c3d86b67571e15ba3520d3d7b11930fb8f34e3a",
+  "note": "Splits made once from created_from_revision; the ব্যাংককে readings were corrected on 2026-10-22, which matches dataset_revision exactly (same sentences, only those 40 labels differ)."
 }

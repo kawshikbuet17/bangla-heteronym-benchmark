@@ -12,8 +12,8 @@ output: তুমি গ্রাফ পেপারে সরলরেখাট
 
 Dataset: [kawshikbuet17/bangla-heteronyms](https://huggingface.co/datasets/kawshikbuet17/bangla-heteronyms) (7,360
 sentences, 183 words, 368 pronunciations, 20 sentences each). Readings use hasanta + ZWNJ (`্‌`, U+09CD U+200C); the
-ZWNJ is never removed from the data. In the pinned revision the two readings of ব্যাংককে are swapped; this repo
-corrects them (see Notes). Also see [EXPERIMENT_LOG.md](EXPERIMENT_LOG.md) (every run, problem and decision),
+ZWNJ is never removed from the data. Pinned revision: `a57c21f`; the experiments were trained on `2c3d86b`, which
+differs only in the swapped readings of ব্যাংককে (see Notes). Also see [EXPERIMENT_LOG.md](EXPERIMENT_LOG.md) (every run, problem and decision),
 [PROGRESS.md](PROGRESS.md) and [results/](results/).
 
 ## 1. Setup
@@ -235,11 +235,11 @@ target's pronunciation: 98.28 ± 0.47 (full sentence 98.37 ± 0.18) at 86.1 ms G
 
 ## 8. Notes
 
-- **ব্যাংককে label fix (2026-10-22).** In dataset revision `2c3d86b` the 20 Bangkok sentences of ব্যাংককে are
-  labelled ব্যাংক্‌কে and the 20 bank sentences ব্যাংকোকে; it is the other way round. `src.data.READING_SWAPS`
-  corrects them in `load_dataset()`, the committed splits and latency inputs are corrected, and all checkpoints, which
-  were trained before the fix, map their output with `reading_fixes` in `heteronym_config.json`
-  (`scripts/patch_checkpoints.py`). Main-split results are unchanged (the swap was the same in training and test);
+- **ব্যাংককে label fix (2026-10-22).** In dataset revision `2c3d86b`, on which every run here was trained, the 20
+  Bangkok sentences of ব্যাংককে are labelled ব্যাংক্‌কে and the 20 bank sentences ব্যাংকোকে; it is the other way
+  round. Revision `a57c21f` (now pinned in `src/data.py`) fixes exactly these 40 labels, and the committed splits and
+  latency inputs match it. All checkpoints were trained before the fix and map their output with `reading_fixes` in
+  `heteronym_config.json` (`scripts/patch_checkpoints.py`, using `src.data.READING_SWAPS`). Main-split results are unchanged (the swap was the same in training and test);
   the unseen split, where ব্যাংককে is a test word, was rescored from the saved predictions
   (`scripts/rescore_label_fix.py`).
 - **ZWNJ after hasanta.** No tokenizer here round-trips it (`results/tokenizer_zwnj.csv`). WordPiece models

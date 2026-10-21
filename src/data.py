@@ -7,7 +7,7 @@ import pandas as pd
 from huggingface_hub import hf_hub_download
 
 DATASET_REPO = "kawshikbuet17/bangla-heteronyms"
-DATASET_REVISION = "2c3d86b67571e15ba3520d3d7b11930fb8f34e3a"
+DATASET_REVISION = "a57c21fdc75a6e0f038960638c1265f8fd9ac00f"  # ব্যাংককে fixed (see TRAINED_REVISION)
 DATASET_FILE = "bangla_heteronym_dataset.csv"
 WORDS_FILE = "bangla_heteronym_words.csv"
 RAW_DIR = Path("data/raw")
@@ -30,25 +30,12 @@ Marker = tuple[str, str] | None
 Normalizer = Callable[[str], str]
 
 
-# Local corrections to dataset revision DATASET_REVISION (owner, 2026-10-22): word -> the two readings whose
-# sentences are swapped. ব্যাংককে "the bank" (object) is ব্যাংক্‌কে and "in/to Bangkok" is ব্যাংকোকে; the revision
-# has them the other way round in all 40 sentences. load_dataset() applies the fix; the committed split files and
-# latency inputs are fixed already. Checkpoints trained before the fix map their output with `reading_fixes` in
-# heteronym_config.json (scripts/patch_checkpoints.py).
+# All runs and checkpoints of 2026-10-18..21 were trained on TRAINED_REVISION, in which the two readings of
+# ব্যাংককে are swapped in all 40 sentences ("the bank" (object) is ব্যাংক্‌কে, "in/to Bangkok" is ব্যাংকোকে). Fixed
+# upstream in DATASET_REVISION (only those 40 rows differ). Those checkpoints map their output with `reading_fixes` in
+# heteronym_config.json (scripts/patch_checkpoints.py); the unseen split was rescored (scripts/rescore_label_fix.py).
+TRAINED_REVISION = "2c3d86b67571e15ba3520d3d7b11930fb8f34e3a"
 READING_SWAPS = {"ব্যাংককে": ("ব্যাংক্‌কে", "ব্যাংকোকে")}
-
-
-def fix_readings(df: pd.DataFrame) -> pd.DataFrame:
-    """Applies READING_SWAPS to rows with spelling / pronunciation / sentence / sentence_phonetic columns."""
-    df = df.copy()
-    for word, (a, b) in READING_SWAPS.items():
-        rows = df["spelling"] == word
-        swapped = df.loc[rows, "pronunciation"].map({a: b, b: a})
-        for i in df.index[rows]:
-            start, end, _ = find_occurrences(df.at[i, "sentence"], word_pattern([word]))[0]
-            df.at[i, "sentence_phonetic"] = df.at[i, "sentence"][:start] + swapped[i] + df.at[i, "sentence"][end:]
-        df.loc[rows, "pronunciation"] = swapped
-    return df
 
 
 def download() -> None:
@@ -61,8 +48,7 @@ def read_csv(path: str | Path) -> pd.DataFrame:
 
 
 def load_dataset() -> pd.DataFrame:
-    """The downloaded revision with READING_SWAPS applied (the file on disk stays the original revision)."""
-    return fix_readings(read_csv(RAW_DIR / DATASET_FILE))
+    return read_csv(RAW_DIR / DATASET_FILE)
 
 
 def load_words() -> dict[str, list[str]]:

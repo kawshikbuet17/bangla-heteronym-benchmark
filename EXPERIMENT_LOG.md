@@ -36,6 +36,14 @@ Disk used by `checkpoints/`: 18G.
 
 ## Entries (newest first)
 
+### 2026-10-22: dataset fixed upstream, revision a57c21f pinned
+
+The owner fixed ব্যাংককে on Hugging Face: revision a57c21fdc75a6e0f038960638c1265f8fd9ac00f. Checked: 7,360 rows, the
+same columns, exactly the 40 ব্যাংককে rows differ from 2c3d86b, it equals 2c3d86b plus our local fix, and the words
+file is identical. `DATASET_REVISION` now points to it (`TRAINED_REVISION` keeps 2c3d86b), the local fix in
+`load_dataset()` is removed, `data/splits/meta.json` records both revisions, `src.splits check` passes on the new
+download. Checkpoints keep `reading_fixes` (they were trained on 2c3d86b); runs keep their recorded revision.
+
 ### 2026-10-22: ব্যাংককে readings swapped in the dataset, fixed locally
 
 Owner spotted it in the paper's example table. In dataset revision 2c3d86b all 20 Bangkok sentences of ব্যাংককে are
