@@ -58,6 +58,7 @@ Accuracy and macro-F1 in %, mean ± std over seeds. Latency: batch 1, full path,
 
 | model | type | params | precision | batch | lr | seeds | accuracy | macro-F1 | acc 2 / 3 readings | other-word change | train time (min) | epochs | GPU p50 | CPU4 p50 | CPU1 p50 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| banglabert_small | encoder | 13.7M | fp16 | 32x1 | 0.0001 | 1 | 96.83 | 96.54 | 97.1 / 83.3 |  | 1.4 | 8.0 | 12.6 | 13.0 | 17.4 |
 | banglabert | encoder | 110.0M | fp16 | 32x1 | 2e-05 | 1 | 98.73 | 98.65 | 98.9 / 88.9 |  | 2.7 | 10.0 | 12.5 | 32.8 | 84.5 |
 | banglat5 | seq2seq | 247.6M | fp32 | 16x1 | 0.0005 | 1 | 98.73 | 98.83 | 98.7 / 100.0 | 0.5 | 33.7 | 15.0 | 236.8 | 323.3 | 745.9 |
 | banglabert_large | encoder | 335.6M | fp16 | 16x2 | 2e-05 | 1 | 98.73 | 98.66 | 98.9 / 88.9 |  | 10.3 | 10.0 | 22.8 | 107.8 | 301.8 |
