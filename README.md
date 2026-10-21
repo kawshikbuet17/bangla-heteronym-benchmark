@@ -1,705 +1,168 @@
 # Bangla heteronym disambiguation benchmark
 
-## 1. What this is
-
-A Bangla heteronym is a word with one spelling and several pronunciations. Given a sentence and one target word
-in it, the model picks which pronunciation is meant. 12 pretrained models (encoders used as classifiers or
-candidate scorers, and T5-style seq2seq models) are fine-tuned and compared on the same fixed splits, for accuracy
-and latency.
+A Bangla heteronym is a word with one spelling and several pronunciations. Given a sentence and a target word in it,
+a model picks the pronunciation that is meant. This repo fine-tunes and compares 12 pretrained models (encoders as
+classifiers or candidate scorers, and T5-style seq2seq models) on the same fixed splits, for accuracy and latency,
+and ships a copyable inference package.
 
 ```
-input : তুমি গ্রাফ পেপারে সরলরেখাটা আঁক।      target: আঁক   candidates: আঁক্‌ | আঁকো
+input : তুমি গ্রাফ পেপারে সরলরেখাটা আঁক।      target: আঁক   readings: আঁক্‌ | আঁকো
 output: তুমি গ্রাফ পেপারে সরলরেখাটা আঁকো।
 ```
 
-Dataset: [kawshikbuet17/bangla-heteronyms](https://huggingface.co/datasets/kawshikbuet17/bangla-heteronyms)
-(public, 7,360 sentences, 183 words, 368 pronunciations, 20 sentences per pronunciation). Pronunciations use
-hasanta + ZWNJ (`্‌`, U+09CD U+200C); the ZWNJ is never removed from the data.
+Dataset: [kawshikbuet17/bangla-heteronyms](https://huggingface.co/datasets/kawshikbuet17/bangla-heteronyms) (7,360
+sentences, 183 words, 368 pronunciations, 20 sentences each). Readings use hasanta + ZWNJ (`্‌`, U+09CD U+200C); the
+ZWNJ is never removed from the data. Also see [EXPERIMENT_LOG.md](EXPERIMENT_LOG.md) (every run, problem and decision),
+[PROGRESS.md](PROGRESS.md) and [results/](results/).
 
-Where to look first:
-
-| File | What it holds |
-|---|---|
-| this README | how to run everything, what every experiment means, things to know |
-| [EXPERIMENT_LOG.md](EXPERIMENT_LOG.md) | dated log of every run, problem, fix and decision, plus observations for the paper |
-| [PROGRESS.md](PROGRESS.md) | the step plan and which steps are done |
-| [results/](results/) | aggregated tables and plots (regenerated from `runs/` by `scripts.aggregate`) |
-
-## 2. Setup
+## 1. Setup
 
 ```bash
 conda create -n hetero python=3.11 -y && conda activate hetero
-# PyTorch 2.7.1 built for CUDA 12.6 (works with NVIDIA driver >= 560)
-pip install torch==2.7.1 --index-url https://download.pytorch.org/whl/cu126
-pip install -r requirements.txt                 # everything
-# or only what one model needs:
-pip install -r requirements/banglabert.txt
+pip install torch==2.7.1 --index-url https://download.pytorch.org/whl/cu126   # CUDA 12.6 build
+pip install -r requirements.txt               # everything, or only one model: requirements/banglabert.txt
 ```
 
-No Hugging Face login is needed. On the original server the T4 is GPU index 1; `scripts/env.sh` pins it with
-`CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=1` (override `CUDA_VISIBLE_DEVICES` elsewhere). All scripts
-source `scripts/env.sh`; run single Python steps after `source scripts/env.sh`.
+`scripts/env.sh` pins the GPU (`CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=1` on the original server; override
+it elsewhere). All scripts source it.
 
-## 3. Data and splits
+## 2. Data and splits
 
 ```bash
-python -m src.data                     # download the CSVs (pinned dataset commit) to data/raw/
-python -m src.splits check             # data + split checks (the splits in data/splits/ are committed)
-python -m scripts.check_tokenizers     # ZWNJ / round-trip report per tokenizer -> results/tokenizer_zwnj.csv
-python -m pytest tests                 # phoneticize + data tests
+python -m src.data                   # download the CSVs (pinned dataset commit) to data/raw/
+python -m src.splits check           # data and split checks
+python -m pytest tests               # tests
 ```
 
-`python -m src.splits create` made the splits once (seed 42) and refuses to overwrite them. Never regenerate them:
-every result in this repo depends on these exact files.
+The splits in `data/splits/` were made once (seed 42) and must never be regenerated.
 
-| Split file(s) | Content | Used by |
-|---|---|---|
-| `train` / `dev` / `test` | 14 / 3 / 3 sentences per pronunciation (5,152 / 1,104 / 1,104) | everything ("main") |
-| `unseen_train` / `unseen_dev` / `unseen_test` | 37 words (20% of the words, stratified by number of pronunciations) are held out completely; their sentences form `unseen_test`; train/dev are the main ones without those words | `unseen`, `cand_unseen` |
-| `train_lc2` / `train_lc5` / `train_lc10` | the first 2 / 5 / 10 training sentences per pronunciation (736 / 1,840 / 3,680) | learning curves |
+| Split | Content |
+|---|---|
+| `train` / `dev` / `test` | 14 / 3 / 3 sentences per pronunciation (5,152 / 1,104 / 1,104) |
+| `unseen_train` / `unseen_dev` / `unseen_test` | 37 words held out completely (their 1,500 sentences form `unseen_test`) |
+| `train_lc2` / `train_lc5` / `train_lc10` | nested subsets with 2 / 5 / 10 sentences per pronunciation (learning curves; 14 = `train`) |
 
-The learning-curve subsets are nested (`lc2` ⊂ `lc5` ⊂ `lc10` ⊂ `train`), and they use the normal dev and test sets,
-so the points are comparable. "14" on a learning curve is simply the main run.
-
-A real-text test set can be added as `data/real_test.csv` (same columns); every later run also reports it, and for
-existing checkpoints use `src.evaluate` (section 6).
-
-### Sample rows
-
-`data/raw/bangla_heteronym_dataset.csv` has one row per sentence; `sentence_phonetic` is the sentence with only the
-target replaced by its pronunciation (here the three readings of কর):
+One row of `data/raw/bangla_heteronym_dataset.csv` (the split files have the same columns):
 
 ```csv
 spelling,pronunciation,sentence,sentence_phonetic
 কর,কর্‌,এ বছর থেকে মোবাইল ফোনের ওপর কর বাড়ছে।,এ বছর থেকে মোবাইল ফোনের ওপর কর্‌ বাড়ছে।
-কর,করো,"তুমি এখনই খাতাটা খুলে আজকের হোমওয়ার্কের অঙ্কগুলো শেষ কর, তারপর যত খুশি টিভি দেখবে।","তুমি এখনই খাতাটা খুলে আজকের হোমওয়ার্কের অঙ্কগুলো শেষ করো, তারপর যত খুশি টিভি দেখবে।"
-কর,কোরো,"পরীক্ষার হলে তুমি প্রশ্ন ভালোভাবে না পড়ে উত্তর লেখা শুরু কর না, তাতে ভুল বেশি হয়।","পরীক্ষার হলে তুমি প্রশ্ন ভালোভাবে না পড়ে উত্তর লেখা শুরু কোরো না, তাতে ভুল বেশি হয়।"
 ```
 
-`data/raw/bangla_heteronym_words.csv` lists each word's readings; their order defines the label index (0, 1, 2):
+`data/raw/bangla_heteronym_words.csv` lists each word's readings (`কর,কর্‌,করো,কোরো`); their order is the label index.
 
-```csv
-spelling,pronunciation 1,pronunciation 2,pronunciation 3
-আঁক,আঁক্‌,আঁকো,
-আসর,আশোর,আসোর,
-```
+## 3. Approaches
 
-The split files (`data/splits/*.csv`) have the same four columns. `src.data.load_split` adds the target's character
-span, its whitespace-token index, the label and the number of readings. One training row:
+The target is marked as `@ word @` so the model knows which occurrence is meant. Training, testing and inference build
+the same input. Example: `হাত-মুখ ধুয়ে তুমি খাওয়া শুরু কর।`, target কর, gold করো.
 
-```python
-{'spelling': 'কর', 'pronunciation': 'করো',
- 'sentence': 'হাত-মুখ ধুয়ে তুমি খাওয়া শুরু কর।', 'sentence_phonetic': 'হাত-মুখ ধুয়ে তুমি খাওয়া শুরু করো।',
- 'start': 31, 'end': 33, 'token_idx': 5, 'label': 1, 'n_readings': 3}
-```
-
-`label` 1 is the second reading of কর in the words file (কর্‌, **করো**, কোরো). Readings ending in `্` are stored as hasanta +
-ZWNJ (U+200C); keep it when copying them.
-
-## 4. Approaches
-
-The target word is marked in the input as `@ word @` (the marker), so the model knows which occurrence is meant.
-
-| `model_type` | How it predicts | Confidence |
+| `model_type` | Model input | Model output |
 |---|---|---|
-| `encoder` | classifier: the hidden state of the opening marker token goes to a linear layer with one output per reading slot; slots the word does not have are masked out | softmax probability |
-| `candidate` | candidate scoring: one (marked sentence, candidate pronunciation) pair per candidate, one score each, softmax over the word's candidates; works for words never seen in training | softmax probability |
-| `seq2seq` | input `phonetic: <marked sentence>`, the model writes the whole sentence back with the target replaced by its pronunciation (greedy decoding); the generated word is mapped back to a candidate, and an output that matches no candidate counts as wrong | exp(mean token log-prob) |
+| `encoder` (classifier) | `[CLS] কর [SEP] হাত - মুখ ধুয়ে তুমি খাওয়া শুরু @ কর @ । [SEP]` | one score per reading (from the opening `@`); highest = করো |
+| `candidate` (scorer) | one row per reading: `[CLS] ... শুরু @ কর @ । [SEP] করো [SEP]` (and কর্, কোরো) | one score per row; highest = করো; also works for unseen words |
+| `seq2seq` | `phonetic: হাত-মুখ ধুয়ে তুমি খাওয়া শুরু @ কর @।` | the sentence rewritten, `হাত-মুখ ধুয়ে তুমি খাওয়া শুরু করো।`; the word at the target's position |
 
-All models are wrapped by `src.predict.Predictor`, so a checkpoint of any type is used the same way (section 8).
+## 4. Experiments
 
-### What a model sees and produces (training, dev and test)
+Every experiment is a **setting** (`SETTINGS` in `src/train.py`), trained with seeds 42, 43, 44 at the model's selected
+learning rate (learning curves: seed 42 only) and reported as mean ± std. Output: `runs/{model}/{setting}/seed{seed}/`.
 
-Training, dev evaluation, testing and inference build the input in exactly the same way (`src/models.py`). For the
-training row above (`হাত-মুখ ধুয়ে তুমি খাওয়া শুরু কর।`, target কর, gold করো):
-
-**`encoder` (BanglaBERT shown, tokens as the tokenizer prints them).** Input is the pair (word, marked sentence); the
-head reads the opening `@` (token 10); the output is one score per reading slot, masked to the word's readings;
-training target = the label:
-
-```text
-[CLS] কর [SEP] হাত - মুখ ধুয়ে তুমি খাওয়া শুরু @ কর @ । [SEP]
-candidates: ['কর্‌', 'করো', 'কোরো']   cand_mask: [True, True, True]   label: 1   ->  prediction করো
-```
-
-**`candidate`.** One pair (marked sentence, candidate) per reading, one score each, softmax over them; training target
-= the index of the gold candidate. (BanglaBERT's WordPiece tokenizer drops the ZWNJ, so `কর্‌` shows as `কর্`.)
-
-```text
-[CLS] হাত - মুখ ধুয়ে তুমি খাওয়া শুরু @ কর @ । [SEP] কর্ [SEP]
-[CLS] হাত - মুখ ধুয়ে তুমি খাওয়া শুরু @ কর @ । [SEP] করো [SEP]
-[CLS] হাত - মুখ ধুয়ে তুমি খাওয়া শুরু @ কর @ । [SEP] কোরো [SEP]
-```
-
-**`seq2seq` (BanglaT5).** Input and training target are text (the target is `sentence_phonetic` after the same
-normalizer); at test time the generated word at the target's position is compared with the gold reading:
-
-```text
-input : phonetic: হাত-মুখ ধুয়ে তুমি খাওয়া শুরু @ কর @।
-target: হাত-মুখ ধুয়ে তুমি খাওয়া শুরু করো।
-```
-
-**Test outputs.** Every run writes `predictions.csv` (one row per test sentence) and `metrics.json`. Encoder
-(`runs/banglabert/main/seed42/predictions.csv`):
-
-```csv
-spelling,sentence,n_readings,gold,prediction,confidence,correct
-আঁক,খাতায় দশটা আঁক শেষ না হলে খেলতে যাওয়া বন্ধ।,2,আঁক্‌,আঁক্‌,0.999884,True
-আঁক,দাদু এখনও মুখে মুখে যেকোনো আঁক মিলিয়ে দেন।,2,আঁক্‌,আঁক্‌,0.999879,True
-```
-
-Seq2seq runs add the generated sentence (`raw_output`; the ZWNJ is removed inside the T5 pipeline, the prediction is
-mapped back to the canonical reading):
-
-```csv
-spelling,sentence,n_readings,gold,prediction,confidence,correct,raw_output
-আঁক,খাতায় দশটা আঁক শেষ না হলে খেলতে যাওয়া বন্ধ।,2,আঁক্‌,আঁক্‌,0.999992,True,খাতায় দশটা আঁক্ শেষ না হলে খেলতে যাওয়া বন্ধ।
-```
-
-Candidate scoring on the unseen split (`runs/banglabert_large/cand_unseen/seed42/predictions.csv`; কর never
-occurs in its training data):
-
-```csv
-spelling,sentence,n_readings,gold,prediction,confidence,correct
-কর,এ বছর থেকে মোবাইল ফোনের ওপর কর বাড়ছে।,3,কর্‌,কর্‌,0.862083,True
-```
-
-`metrics.json` (shortened):
-
-```json
-{
- "train": {"train_time_s": 248.8, "epochs_trained": 10.0, "best_epoch": 7, "steps": 1610,
-           "peak_gpu_memory_train_mb": 2114, "params": 110029059, "checkpoint_size_mb": 421.3},
- "dev":   {"n": 1104, "accuracy": 0.9918, "macro_f1": 0.9916, "accuracy_by_readings": {"2": 0.9926, "3": 0.9444},
-           "accuracy_by_word": {"আঁক": 1.0, "আসর": 1.0, "আসল": 0.8333, "...": "..."}},
- "test":  {"n": 1104, "accuracy": "...", "macro_f1": "...", "accuracy_by_readings": {}, "accuracy_by_word": {}}
-}
-```
-
-Unseen-split runs name their test block `unseen_test` instead of `test`.
-
-## 5. Experiments: what each one means
-
-Every experiment is a **setting** (`SETTINGS` in `src/train.py`) trained with 3 seeds (42, 43, 44) at the model's
-selected learning rate, except the learning curves, which use seed 42 only. Results are reported as mean ± std over
-the seeds. Output: `runs/{model}/{setting}/seed{seed}/`.
-
-| Setting | Question it answers | Models | Results file |
+| Setting | Question | Models | Results |
 |---|---|---|---|
-| `lr_search` | which learning rate is best? one seed-42 run per lr in the config's `lr_grid`, judged on **dev** only; `scripts.select_lr` writes `runs/{model}/best_lr.json` | all | `results/lr_search.csv` |
-| `main` | the benchmark itself: accuracy, macro-F1, per-word accuracy on the main test set | all 12 | `results/summary.md`, `per_word.csv` |
-| `unseen` | can a model handle a heteronym it never saw in training? (only seq2seq and candidate models can, because a classifier has no slots for unknown words) | seq2seq models | `results/summary.md` |
-| `cand_main`, `cand_unseen` | candidate scoring on the main and unseen splits; is it as accurate as the classifier, and does it generalize to unseen words? | 3 best encoders | `results/summary.md`, `latency.csv` |
-| `lc2`, `lc5`, `lc10` | **learning curve**: how many labelled sentences per pronunciation are needed? Seed 42 only | all 12 | `results/learning_curve.csv`, `plots/learning_curves.png` |
-| `abl_marker_special` | marker `<h> word </h>` (new tokens) instead of `@ word @` | BanglaBERT-large | `results/ablations.md` |
-| `abl_marker_none` | no marker at all (the head reads the target word's first token) | BanglaBERT-large | `results/ablations.md` |
-| `abl_head_mean`, `abl_head_cls` | pool the mean of the target's tokens, or `[CLS]`, instead of the opening marker token | BanglaBERT-large | `results/ablations.md` |
-| `abl_output_target`, `abl_output_target_keep` | seq2seq writes only the target's pronunciation instead of the whole sentence (`_keep` is one extra seed whose checkpoint is kept to measure its latency, `runs/banglat5/latency_target.json`) | BanglaT5 | `results/ablations.md`, `latency.csv` |
+| `lr_search` | best learning rate (one seed-42 run per value in `lr_grid`, judged on dev) | all | `results/lr_search.csv` |
+| `main` | the benchmark: accuracy, macro-F1, per-word accuracy | all 12 | `results/summary.md`, `per_word.csv` |
+| `cand_main`, `cand_unseen` | candidate scoring on the main split and on unseen words | 3 best encoders | `results/summary.md` |
+| `unseen` | seq2seq on unseen words | 3 seq2seq | `results/summary.md` |
+| `lc2`, `lc5`, `lc10` | learning curve: how many sentences per pronunciation are needed | all 12 | `results/learning_curve.csv` |
+| `abl_marker_special`, `abl_marker_none` | `<h> word </h>` or no marker instead of `@ word @` | BanglaBERT-large | `results/ablations.md` |
+| `abl_head_mean`, `abl_head_cls` | mean of the target's tokens or `[CLS]` instead of the opening marker | BanglaBERT-large | `results/ablations.md` |
+| `abl_output_target(_keep)` | seq2seq writes only the reading instead of the sentence | BanglaT5 | `results/ablations.md` |
 
-How to read the learning curve: plot test accuracy against 2 / 5 / 10 / 14 sentences per pronunciation. Where the
-curve flattens (the difference to the next point is within the seed spread of the main runs, about 0.1 to 0.4 points
-for most models), more data stops helping; that point is the data budget per pronunciation when adding new
-heteronyms. A curve still rising at 14 means more data would likely help.
+ByT5-small was planned as a 13th model and dropped (about 50 GPU hours on the T4); see EXPERIMENT_LOG.md.
 
-Why only seed 42 for the learning curves (owner, 2026-10-20): the drops from 14 to 2 sentences are 5 to 15 points,
-far larger than the spread between seeds (about 0.6 to 1.3 points at lc2, measured with 3 seeds on 4 models before
-the change), so one seed shows the shape, and it saves about 10 h of GPU time. The point at 14 is the seed-42 main
-run, so the whole curve uses the same seed (`LC_SEED` in `scripts/aggregate.py`). The extra lc2 seeds were deleted.
-
-Why some experiments use only a few models: ablations explain *why* the best setup works, so one strong model is
-enough (the owner decided on 2026-10-20 not to extend them; the no-marker gain is reported as one-model evidence); candidate scoring and the unseen split concern the models one would deploy (or the only ones that can handle
-unseen words). Running every setting for all 12 models would multiply the GPU time without changing the conclusions.
-
-ByT5-small was planned as a 13th model and dropped (2026-10-20): one run took ~7 h on the T4, and its remaining runs
-would have taken ~50 h. See EXPERIMENT_LOG.md.
-
-## 6. Run experiments
-
-Full cycle for one model (lr search, 3 seeds, keep best checkpoint, latency, demo, requirements, aggregation),
-best inside tmux; logs go to `logs/{model}.log`:
+## 5. Run
 
 ```bash
-bash scripts/run_model.sh banglabert_small            # or: ... banglabert_small train | measure
-bash scripts/run_setting.sh cand_main banglabert      # one setting, seeds 42-44, for the listed models
+bash scripts/run_model.sh banglabert                  # full cycle: lr search, 3 seeds, keep best, latency, aggregate
+bash scripts/run_setting.sh cand_main banglabert      # one setting, seeds 42-44
 SEEDS=42 bash scripts/run_setting.sh lc2 banglabert   # learning curves: seed 42 only
+python -m scripts.aggregate                           # results/ tables and plots
 ```
-
-`train` runs the lr search, the 3 seeds and keeps the best checkpoint; `measure` runs the latency benchmark,
-the phoneticize demo, the requirements file and the aggregation (the default runs both). `run_setting.sh` needs the
-model's `main` cycle first (it uses `best_lr.json`); for `cand_main` it also keeps the best seed in
-`checkpoints/{model}_cand`.
 
 Single steps:
 
 ```bash
-python -m src.train --config configs/banglabert.yaml --lr-search 3e-5      # one lr-search run (seed 42, dev only)
-python -m scripts.select_lr banglabert                                     # -> runs/banglabert/best_lr.json
-python -m src.train --config configs/banglabert.yaml --seed 43             # one seed with the best lr
-python -m src.train --config configs/banglabert.yaml --seed 42 --setting cand_main   # any setting from section 5
-python -m scripts.keep_best banglabert main checkpoints/banglabert         # keep best seed's checkpoint
+python -m src.train --config configs/banglabert.yaml --lr-search 3e-5   # one lr-search run
+python -m scripts.select_lr banglabert                                  # -> runs/banglabert/best_lr.json
+python -m src.train --config configs/banglabert.yaml --seed 43 [--setting cand_main]
+python -m scripts.keep_best banglabert main checkpoints/banglabert
 python -m src.evaluate --checkpoint checkpoints/banglabert --data data/real_test.csv --out runs/banglabert/real_test.json
 python -m src.benchmark_latency --checkpoint checkpoints/banglabert --out runs/banglabert/latency.json
-python -m scripts.aggregate                                                # results/ tables and plots
-bash scripts/smoke.sh                                                      # 20-step smoke test of every model
+bash scripts/smoke.sh                                                   # 20-step smoke test of every model
 ```
 
-Resuming: every run whose `runs/{model}/{setting}/seed{seed}/metrics.json` exists is skipped, so re-running the same
-command continues where it stopped. Training curves: `tensorboard --logdir runs`.
+A run whose `metrics.json` exists is skipped, so an interrupted command can be re-run. Recipe (same for all models,
+`configs/{model}.yaml`): AdamW, weight decay 0.01, 10% warm-up then linear decay, clipping 1.0, max length 128, at most
+10 epochs (encoders) or 15 (seq2seq), early stopping (patience 3) on dev accuracy, best epoch kept.
 
-Training recipe (same for every model, set in `configs/{model}.yaml`): AdamW, weight decay 0.01, 10% linear warm-up
-then linear decay, gradient clipping 1.0, max length 128, at most 10 epochs (encoders) or 15 (seq2seq), early
-stopping with patience 3 on dev accuracy, the best epoch's weights are kept.
+Each run writes `config.json` (config, package versions, GPU, git commit), `metrics.json` (train time, epochs, memory,
+params; dev and test accuracy, macro-F1, per-word accuracy), `predictions.csv` (every test sentence with gold,
+prediction, confidence) and `train_log.csv`. Latency (`runs/{model}/latency*.json`, `results/latency.csv`) is the full
+path (normalizer, tokenizer, model, decoding) on the T4 and on a CPU with 4 and 1 threads: p50/p95/p99 at batch 1 (200
+sentences after 20 warm-up calls) and throughput at batch 8 and 32.
 
-## 7. What is measured
+## 6. Use a trained model
 
-Per run, `runs/{model}/{setting}/seed{seed}/`:
-
-| File | Content |
-|---|---|
-| `config.json` | the full config actually used, package versions, GPU, git commit, and any automatic `adjustments` |
-| `metrics.json` | `train` (time, epochs, best epoch, steps, peak GPU memory, params, checkpoint size) and `dev` / `test` (accuracy, macro-F1, accuracy by word and by number of readings; seq2seq also `other_word_change_rate`, the share of outputs that change a word other than the target, and `avg_generated_tokens`) |
-| `predictions.csv` | every test sentence with gold, prediction and confidence |
-| `train_log.csv`, `tb/` | loss, learning rate, grad norm and dev accuracy per step / epoch (`tb/` is not committed) |
-
-**Latency** (`runs/{model}/latency.json`, `latency_cand.json`, `latency_target.json`; table `results/latency.csv`)
-is the time to answer one request through the full path: normalizer, tokenizer, model, decoding and mapping back
-to a pronunciation. For seq2seq it is therefore mostly output generation time. Measured on the T4 GPU and on CPU
-with 4 threads and 1 thread: batch size 1 (20 warm-up calls, 200 timed calls; mean, **p50**, p95, p99), forward
-pass only, throughput at batch 8 and 32, the phoneticize demo paragraph, and peak GPU memory. Tables report p50 at
-batch size 1.
-
-## 8. Use a trained model
+Kept checkpoints (not committed): `checkpoints/{model}` is the best `main` seed of each model,
+`checkpoints/{model}_cand` the best candidate scorer.
 
 ```bash
 python -m src.predict --checkpoint checkpoints/banglabert --text "তুমি একটু অপেক্ষা কর, আমি আসছি। বিকেলে তুমি পার্কে খেল।"
+# তুমি একটু অপেক্ষা করো, আমি আসছি। বিকেলে তুমি পার্কে খ্যালো।   (+ one line per word with its confidence, and the time)
 ```
 
-prints the phonetic text, one line per heteronym (word, character position, prediction, confidence) and the time:
-
-```text
-তুমি একটু অপেক্ষা করো, আমি আসছি। বিকেলে তুমি পার্কে খ্যালো।
-
-word	position	prediction	confidence
-কর	18	করো	0.9464
-খেল	51	খ্যালো	0.9790
-
-2 heteronyms, 34.4 ms on cpu (checkpoints/banglabert)
-```
-
-Add `--device cpu` or `--device cuda` to choose the device, or `--file text.txt` instead of `--text`. Any kept
-checkpoint works the same way; `checkpoints/banglat5` gives the same text here (confidences 0.9997 and 1.0000) in
-284 ms on the CPU.
-
-```python
-from src.predict import Predictor
-
-predictor = Predictor.load("checkpoints/banglabert")      # any kept checkpoint folder: encoder, candidate or seq2seq
-text = "তুমি একটু অপেক্ষা কর, আমি আসছি। কর কাজটা, তারপর আবার কর!\nবিকেলে তুমি পার্কে খেল।"
-print(predictor.phoneticize(text))                        # every heteronym replaced, text otherwise unchanged
-# তুমি একটু অপেক্ষা করো, আমি আসছি। কোরো কাজটা, তারপর আবার করো!
-# বিকেলে তুমি পার্কে খ্যালো।
-# (the second কর is read as the "later" imperative কোরো; করো would be more natural here, one of the
-#  hard same-slot cases described in the paper)
-print(predictor.predict("তুমি গ্রাফ পেপারে সরলরেখাটা আঁক।", "আঁক"))   # আঁকো
-print(predictor.predict("সময়মতো কর না দিলে জরিমানা গুনতে হবে।", "কর"))  # কর্‌
-
-# Marked input: mark the occurrence(s) you want read with [ ] (or marks=("<<", ">>"))
-print(predictor.predict_marked("সরকার কর বাড়িয়েছে, তাই হিসাবটা আবার [কর]।"))       # করো (only the reading)
-print(predictor.phoneticize_marked("সরকার কর বাড়িয়েছে, তাই হিসাবটা আবার [কর]।"))   # whole text, only marked words replaced:
-# সরকার কর বাড়িয়েছে, তাই হিসাবটা আবার করো।
-
-phonetic, details = predictor.phoneticize_detailed("বিকেলে মাঠে বল নিয়ে খেলব, কাল আবার দেখা হবে।")
-# phonetic: বিকেলে মাঠে বল্‌ নিয়ে খেলব, কাল্‌ আবার দেখা হবে।
-# details:  [{'word': 'বল', 'position': 12, 'prediction': 'বল্‌', 'confidence': 0.9997},
-#            {'word': 'কাল', 'position': 27, 'prediction': 'কাল্‌', 'confidence': 0.9995}]
-```
-
-A longer input, the 8-heteronym paragraph used for the latency test (`data/latency_paragraph.txt`), with
-`checkpoints/banglabert_small` (all 8 correct):
-
-```text
-in : বিকেলে তুমি পার্কে খেল, সন্ধ্যায় পড়তে বসবে। রাস্তা থেকে আনা বিড়ালছানাটা প্রথমে খুব আঁচড়াত, এখন একদম পোষ মেনে আমার কোলেই ঘুমায়। তুমি আমার জন্য একটু অপেক্ষা কর, আমি আসছি। চারদিকে রটে গেছে, বাঘ এসেছে।
-     খালি পেটে ওষুধ খেলে গ্যাস হয়। চেয়ারে বসে ঘুমিয়ে পড়লেন দাদু। তুমি গ্রাফ পেপারে সরলরেখাটা আঁক। প্রেমিকের গিটার শুনে মেয়েটা পটল।
-out: বিকেলে তুমি পার্কে খ্যালো, সন্ধ্যায় পড়তে বসবে। রাস্তা থেকে আনা বিড়ালছানাটা প্রথমে খুব আঁচড়াত, এখন একদম পোশ্‌ মেনে আমার কোলেই ঘুমায়। তুমি আমার জন্য একটু অপেক্ষা করো, আমি আসছি। চারদিকে রোটে গেছে, বাঘ এসেছে।
-     খালি পেটে ওষুধ খেলে গ্যাস হয়। চেয়ারে বোশে ঘুমিয়ে পড়লেন দাদু। তুমি গ্রাফ পেপারে সরলরেখাটা আঁকো। প্রেমিকের গিটার শুনে মেয়েটা পট্‌লো।
-```
-
-Words that are not in the heteronym list (here আঁচড়াত, খেলব) are never changed.
-
-### Copyable package: `bangla_heteronym_package/`
-
-For use in another project, copy the folder `bangla_heteronym_package/` (self-contained, no dependency on `src/`) and
-a checkpoint folder. It has an interface (`HeteronymReader`), its implementation (`HeteronymModelReader`), a
-singleton `initialize(path)` / `get_reader()`, single and batch methods, settings from environment variables or a
-`.env` file (`.env.example`), a demo with its outputs (`demo.py`) and its own [README](bangla_heteronym_package/README.md).
-`tests/test_package.py` checks that it gives exactly the same output as `src.predict.Predictor` for an encoder, a
-candidate and a seq2seq checkpoint.
+**In another project**, copy the self-contained package `bangla_heteronym_package/` (see its
+[README](bangla_heteronym_package/README.md) and `demo.py`):
 
 ```python
 import bangla_heteronym_package as bhp
-reader = bhp.initialize("/abs/path/checkpoints/banglabert")   # once; bhp.get_reader() elsewhere
-reader.phoneticize(text)                       # reader.phoneticize_batch([text, ...])
-reader.predict(sentence, "কর")                 # reader.predict_batch([(sentence, "কর"), ...])
-reader.predict_marked("... আবার [কর]।")         # reader.predict_marked_batch([...])
-reader.phoneticize_marked("... আবার [কর]।")     # whole text, only marked words replaced; reader.phoneticize_marked_batch([...])
+reader = bhp.initialize("/abs/path/checkpoints/banglabert")              # once (singleton)
+reader.phoneticize("আগে কর কাজটা, তারপর আবার কর।")                       # 'আগে কোরো কাজটা, তারপর আবার করো।'
+reader.predict("সময়মতো কর না দিলে জরিমানা গুনতে হবে।", "কর")              # 'কর্‌'
+reader.predict_marked("সরকার কর বাড়িয়েছে, তাই হিসাবটা আবার [কর]।")         # 'করো'
+reader.phoneticize_marked("সরকার কর বাড়িয়েছে, তাই হিসাবটা আবার [কর]।")     # 'সরকার কর বাড়িয়েছে, তাই হিসাবটা আবার করো।'
+reader.phoneticize_batch([text1, text2])                                  # every method has a *_batch version
 ```
 
-#### Every method: model input and output
+`src.predict.Predictor` (used by the benchmark) has the same methods (`Predictor.load(path)`), plus
+`phoneticize_detailed` (position and confidence per word) and `predict_items` (character offsets).
 
-Every method with what the model received ("in") and returned ("out") for each word it read, for the three model
-types (real runs of `checkpoints/banglabert`, `checkpoints/banglabert_cand` and `checkpoints/banglat5`; the same as
-in `demo.py`). Your `[ ]` marks never reach the model, it sees the word marked by `@`; all rows of one call go through
-the model together. `# ->` is what the method returns with BanglaBERT; the models do not always agree (see 3 and 7).
-Seq2seq output has no ZWNJ (`বল্`), so the word is mapped back to the reading (`বল্‌`).
-
-```python
-reader = bhp.initialize("/abs/path/checkpoints/banglabert")
-
-# 3. Text in, corrected text out
-print(reader.phoneticize("আগে কর কাজটা, তারপর আবার কর। বিকেলে মাঠে বল নিয়ে যাব।"))
-#   encoder (banglabert): in = word + marked sentence, out = probability per reading
-#     in:  কর + আগে @ কর @ কাজটা, তারপর আবার কর।
-#     out: কর্‌ 0.2683, করো 0.0227, কোরো 0.7090 -> কোরো
-#     in:  কর + আগে কর কাজটা, তারপর আবার @ কর @।
-#     out: কর্‌ 0.0013, করো 0.7762, কোরো 0.2225 -> করো
-#     in:  বল + বিকেলে মাঠে @ বল @ নিয়ে যাব।
-#     out: বল্‌ 0.9998, বলো 0.0002 -> বল্‌
-#   candidate (banglabert_cand): in = one row per reading (marked sentence + reading), out = probability per row
-#     in:  আগে @ কর @ কাজটা, তারপর আবার কর। + each of কর্‌ / করো / কোরো
-#     out: কর্‌ 0.0555, করো 0.9440, কোরো 0.0004 -> করো
-#     in:  আগে কর কাজটা, তারপর আবার @ কর @। + each of কর্‌ / করো / কোরো
-#     out: কর্‌ 0.0084, করো 0.9821, কোরো 0.0095 -> করো
-#     in:  বিকেলে মাঠে @ বল @ নিয়ে যাব। + each of বল্‌ / বলো
-#     out: বল্‌ 1.0000, বলো 0.0000 -> বল্‌
-#   seq2seq (banglat5): in = phonetic: marked sentence, out = generated sentence (word at the marked position)
-#     in:  phonetic: আগে @ কর @ কাজটা, তারপর আবার কর।
-#     out: আগে করো কাজটা, তারপর আবার করো। -> করো
-#     in:  phonetic: আগে কর কাজটা, তারপর আবার @ কর @।
-#     out: আগে করো কাজটা, তারপর আবার করো। -> করো
-#     in:  phonetic: বিকেলে মাঠে @ বল @ নিয়ে যাব।
-#     out: বিকেলে মাঠে বল্ নিয়ে যাব। -> বল্‌
-# -> আগে কোরো কাজটা, তারপর আবার করো। বিকেলে মাঠে বল্‌ নিয়ে যাব।
-
-# 4. Many texts in one call
-for text in reader.phoneticize_batch(["তুমি একটু অপেক্ষা কর, আমি আসছি।", "তুমি গ্রাফ পেপারে সরলরেখাটা আঁক।", "এখানে কোনো হেটেরোনিম নেই।"]):
-    print(text)
-#   encoder (banglabert): in = word + marked sentence, out = probability per reading
-#     in:  কর + তুমি একটু অপেক্ষা @ কর @, আমি আসছি।
-#     out: কর্‌ 0.0003, করো 0.9464, কোরো 0.0533 -> করো
-#     in:  আঁক + তুমি গ্রাফ পেপারে সরলরেখাটা @ আঁক @।
-#     out: আঁক্‌ 0.0003, আঁকো 0.9997 -> আঁকো
-#   candidate (banglabert_cand): in = one row per reading (marked sentence + reading), out = probability per row
-#     in:  তুমি একটু অপেক্ষা @ কর @, আমি আসছি। + each of কর্‌ / করো / কোরো
-#     out: কর্‌ 0.0001, করো 0.9966, কোরো 0.0033 -> করো
-#     in:  তুমি গ্রাফ পেপারে সরলরেখাটা @ আঁক @। + each of আঁক্‌ / আঁকো
-#     out: আঁক্‌ 0.0000, আঁকো 1.0000 -> আঁকো
-#   seq2seq (banglat5): in = phonetic: marked sentence, out = generated sentence (word at the marked position)
-#     in:  phonetic: তুমি একটু অপেক্ষা @ কর @, আমি আসছি।
-#     out: তুমি একটু অপেক্ষা করো, আমি আসছি। -> করো
-#     in:  phonetic: তুমি গ্রাফ পেপারে সরলরেখাটা @ আঁক @।
-#     out: তুমি গ্রাফ পেপারে সরলরেখাটা আঁকো। -> আঁকো
-#   (the third text has no heteronym, so it is not sent to the model)
-# -> তুমি একটু অপেক্ষা করো, আমি আসছি।
-# -> তুমি গ্রাফ পেপারে সরলরেখাটা আঁকো।
-# -> এখানে কোনো হেটেরোনিম নেই।
-
-# 5. Sentence + word in, only the word's reading out (first occurrence of the word)
-print(reader.predict("সময়মতো কর না দিলে জরিমানা গুনতে হবে।", "কর"))
-#   encoder (banglabert): in = word + marked sentence, out = probability per reading
-#     in:  কর + সময়মতো @ কর @ না দিলে জরিমানা গুনতে হবে।
-#     out: কর্‌ 0.9868, করো 0.0002, কোরো 0.0130 -> কর্‌
-#   candidate (banglabert_cand): in = one row per reading (marked sentence + reading), out = probability per row
-#     in:  সময়মতো @ কর @ না দিলে জরিমানা গুনতে হবে। + each of কর্‌ / করো / কোরো
-#     out: কর্‌ 1.0000, করো 0.0000, কোরো 0.0000 -> কর্‌
-#   seq2seq (banglat5): in = phonetic: marked sentence, out = generated sentence (word at the marked position)
-#     in:  phonetic: সময়মতো @ কর @ না দিলে জরিমানা গুনতে হবে।
-#     out: সময়মতো কর্ না দিলে জরিমানা গুনতে হবে। -> কর্‌
-# -> কর্‌
-
-# 6. Many (sentence, word) pairs in one call
-print(*reader.predict_batch([("সময়মতো কর না দিলে জরিমানা গুনতে হবে।", "কর"), ("বিকেলে মাঠে বল নিয়ে যাব।", "বল")]))
-#   encoder (banglabert): in = word + marked sentence, out = probability per reading
-#     in:  কর + সময়মতো @ কর @ না দিলে জরিমানা গুনতে হবে।
-#     out: কর্‌ 0.9868, করো 0.0002, কোরো 0.0130 -> কর্‌
-#     in:  বল + বিকেলে মাঠে @ বল @ নিয়ে যাব।
-#     out: বল্‌ 0.9998, বলো 0.0002 -> বল্‌
-#   candidate (banglabert_cand): in = one row per reading (marked sentence + reading), out = probability per row
-#     in:  সময়মতো @ কর @ না দিলে জরিমানা গুনতে হবে। + each of কর্‌ / করো / কোরো
-#     out: কর্‌ 1.0000, করো 0.0000, কোরো 0.0000 -> কর্‌
-#     in:  বিকেলে মাঠে @ বল @ নিয়ে যাব। + each of বল্‌ / বলো
-#     out: বল্‌ 1.0000, বলো 0.0000 -> বল্‌
-#   seq2seq (banglat5): in = phonetic: marked sentence, out = generated sentence (word at the marked position)
-#     in:  phonetic: সময়মতো @ কর @ না দিলে জরিমানা গুনতে হবে।
-#     out: সময়মতো কর্ না দিলে জরিমানা গুনতে হবে। -> কর্‌
-#     in:  phonetic: বিকেলে মাঠে @ বল @ নিয়ে যাব।
-#     out: বিকেলে মাঠে বল্ নিয়ে যাব। -> বল্‌
-# -> কর্‌ বল্‌
-
-# 7. Marked word in, only its reading out (use it when the word occurs more than once)
-print(reader.predict_marked("সরকার কর বাড়িয়েছে, তাই হিসাবটা আবার [কর]।"))
-#   encoder (banglabert): in = word + marked sentence, out = probability per reading
-#     in:  কর + সরকার কর বাড়িয়েছে, তাই হিসাবটা আবার @ কর @।
-#     out: কর্‌ 0.0071, করো 0.6238, কোরো 0.3691 -> করো
-#   candidate (banglabert_cand): in = one row per reading (marked sentence + reading), out = probability per row
-#     in:  সরকার কর বাড়িয়েছে, তাই হিসাবটা আবার @ কর @। + each of কর্‌ / করো / কোরো
-#     out: কর্‌ 0.9955, করো 0.0026, কোরো 0.0019 -> কর্‌
-#   seq2seq (banglat5): in = phonetic: marked sentence, out = generated sentence (word at the marked position)
-#     in:  phonetic: সরকার কর বাড়িয়েছে, তাই হিসাবটা আবার @ কর @।
-#     out: সরকার কর্ বাড়িয়েছে, তাই হিসাবটা আবার করো। -> করো
-# -> করো
-
-# 8. Other marks, if [ ] can occur in your text
-print(reader.predict_marked("মাঠে যাওয়ার সময় <<বল>> নিয়ে যেও।", marks=("<<", ">>")))
-#   encoder (banglabert): in = word + marked sentence, out = probability per reading
-#     in:  বল + মাঠে যাওয়ার সময় @ বল @ নিয়ে যেও।
-#     out: বল্‌ 0.9997, বলো 0.0003 -> বল্‌
-#   candidate (banglabert_cand): in = one row per reading (marked sentence + reading), out = probability per row
-#     in:  মাঠে যাওয়ার সময় @ বল @ নিয়ে যেও। + each of বল্‌ / বলো
-#     out: বল্‌ 1.0000, বলো 0.0000 -> বল্‌
-#   seq2seq (banglat5): in = phonetic: marked sentence, out = generated sentence (word at the marked position)
-#     in:  phonetic: মাঠে যাওয়ার সময় @ বল @ নিয়ে যেও।
-#     out: মাঠে যাওয়ার সময় বল্ নিয়ে যেও। -> বল্‌
-# -> বল্‌
-
-# 9. Many marked texts in one call (here the first and the second কর of the same sentence)
-print(*reader.predict_marked_batch(["সরকার [কর] বাড়িয়েছে, তাই হিসাবটা আবার কর।", "সরকার কর বাড়িয়েছে, তাই হিসাবটা আবার [কর]।"]))
-#   encoder (banglabert): in = word + marked sentence, out = probability per reading
-#     in:  কর + সরকার @ কর @ বাড়িয়েছে, তাই হিসাবটা আবার কর।
-#     out: কর্‌ 0.9857, করো 0.0002, কোরো 0.0141 -> কর্‌
-#     in:  কর + সরকার কর বাড়িয়েছে, তাই হিসাবটা আবার @ কর @।
-#     out: কর্‌ 0.0071, করো 0.6238, কোরো 0.3691 -> করো
-#   candidate (banglabert_cand): in = one row per reading (marked sentence + reading), out = probability per row
-#     in:  সরকার @ কর @ বাড়িয়েছে, তাই হিসাবটা আবার কর। + each of কর্‌ / করো / কোরো
-#     out: কর্‌ 1.0000, করো 0.0000, কোরো 0.0000 -> কর্‌
-#     in:  সরকার কর বাড়িয়েছে, তাই হিসাবটা আবার @ কর @। + each of কর্‌ / করো / কোরো
-#     out: কর্‌ 0.9955, করো 0.0026, কোরো 0.0019 -> কর্‌
-#   seq2seq (banglat5): in = phonetic: marked sentence, out = generated sentence (word at the marked position)
-#     in:  phonetic: সরকার @ কর @ বাড়িয়েছে, তাই হিসাবটা আবার কর।
-#     out: সরকার কর্ বাড়িয়েছে, তাই হিসাবটা আবার করো। -> কর্‌
-#     in:  phonetic: সরকার কর বাড়িয়েছে, তাই হিসাবটা আবার @ কর @।
-#     out: সরকার কর্ বাড়িয়েছে, তাই হিসাবটা আবার করো। -> করো
-# -> কর্‌ করো
-
-# 10. Marked text in, whole text out: only the marked words are replaced, the marks are removed
-print(reader.phoneticize_marked("সরকার কর বাড়িয়েছে, তাই হিসাবটা আবার [কর]।"))
-#   encoder (banglabert): in = word + marked sentence, out = probability per reading
-#     in:  কর + সরকার কর বাড়িয়েছে, তাই হিসাবটা আবার @ কর @।
-#     out: কর্‌ 0.0071, করো 0.6238, কোরো 0.3691 -> করো
-#   candidate (banglabert_cand): in = one row per reading (marked sentence + reading), out = probability per row
-#     in:  সরকার কর বাড়িয়েছে, তাই হিসাবটা আবার @ কর @। + each of কর্‌ / করো / কোরো
-#     out: কর্‌ 0.9955, করো 0.0026, কোরো 0.0019 -> কর্‌
-#   seq2seq (banglat5): in = phonetic: marked sentence, out = generated sentence (word at the marked position)
-#     in:  phonetic: সরকার কর বাড়িয়েছে, তাই হিসাবটা আবার @ কর @।
-#     out: সরকার কর্ বাড়িয়েছে, তাই হিসাবটা আবার করো। -> করো
-# -> সরকার কর বাড়িয়েছে, তাই হিসাবটা আবার করো।
-
-# 11. Many marked texts in one call; a text can have several marked words
-for text in reader.phoneticize_marked_batch(["সরকার [কর] বাড়িয়েছে, তাই হিসাবটা আবার [কর]।", "মাঠে যাওয়ার সময় [বল] নিয়ে যেও।"]):
-    print(text)
-#   encoder (banglabert): in = word + marked sentence, out = probability per reading
-#     in:  কর + সরকার @ কর @ বাড়িয়েছে, তাই হিসাবটা আবার কর।
-#     out: কর্‌ 0.9857, করো 0.0002, কোরো 0.0141 -> কর্‌
-#     in:  কর + সরকার কর বাড়িয়েছে, তাই হিসাবটা আবার @ কর @।
-#     out: কর্‌ 0.0071, করো 0.6238, কোরো 0.3691 -> করো
-#     in:  বল + মাঠে যাওয়ার সময় @ বল @ নিয়ে যেও।
-#     out: বল্‌ 0.9997, বলো 0.0003 -> বল্‌
-#   candidate (banglabert_cand): in = one row per reading (marked sentence + reading), out = probability per row
-#     in:  সরকার @ কর @ বাড়িয়েছে, তাই হিসাবটা আবার কর। + each of কর্‌ / করো / কোরো
-#     out: কর্‌ 1.0000, করো 0.0000, কোরো 0.0000 -> কর্‌
-#     in:  সরকার কর বাড়িয়েছে, তাই হিসাবটা আবার @ কর @। + each of কর্‌ / করো / কোরো
-#     out: কর্‌ 0.9955, করো 0.0026, কোরো 0.0019 -> কর্‌
-#     in:  মাঠে যাওয়ার সময় @ বল @ নিয়ে যেও। + each of বল্‌ / বলো
-#     out: বল্‌ 1.0000, বলো 0.0000 -> বল্‌
-#   seq2seq (banglat5): in = phonetic: marked sentence, out = generated sentence (word at the marked position)
-#     in:  phonetic: সরকার @ কর @ বাড়িয়েছে, তাই হিসাবটা আবার কর।
-#     out: সরকার কর্ বাড়িয়েছে, তাই হিসাবটা আবার করো। -> কর্‌
-#     in:  phonetic: সরকার কর বাড়িয়েছে, তাই হিসাবটা আবার @ কর @।
-#     out: সরকার কর্ বাড়িয়েছে, তাই হিসাবটা আবার করো। -> করো
-#     in:  phonetic: মাঠে যাওয়ার সময় @ বল @ নিয়ে যেও।
-#     out: মাঠে যাওয়ার সময় বল্ নিয়ে যেও। -> বল্‌
-# -> সরকার কর্‌ বাড়িয়েছে, তাই হিসাবটা আবার করো।
-# -> মাঠে যাওয়ার সময় বল্‌ নিয়ে যেও।
-```
-
-#### Batch inference (all models)
-
-Every benchmark model supports batch inference: encoder classifiers, candidate scorers and seq2seq models all run on
-padded batches (64 heteronym occurrences per model call in the `*_batch` methods). Measured GPU throughput on a Tesla
-T4 (full path, 200 test sentences):
-
-| Model | Checkpoint | Type | Batch inference | Sentences/s, batch 1 | Sentences/s, batch 32 |
-|---|---|---|---|---|---|
-| BanglaBERT-small | `checkpoints/banglabert_small` | encoder classifier | yes | 77 | 1488 |
-| BanglaBERT | `checkpoints/banglabert` | encoder classifier | yes | 79 | 1500 |
-| Bangla-BERT-base | `checkpoints/bangla_bert_base` | encoder classifier | yes | 89 | 2068 |
-| MuRIL-base | `checkpoints/muril_base` | encoder classifier | yes | 96 | 1976 |
-| XLM-R-base | `checkpoints/xlm_roberta_base` | encoder classifier | yes | 94 | 1845 |
-| IndicBERTv2-MLM | `checkpoints/indicbertv2_mlm` | encoder classifier | yes | 89 | 1972 |
-| mDeBERTa-v3-base | `checkpoints/mdeberta_v3_base` | encoder classifier | yes | 38 | 235 |
-| BanglaBERT-large | `checkpoints/banglabert_large` | encoder classifier | yes | 43 | 820 |
-| XLM-R-large | `checkpoints/xlm_roberta_large` | encoder classifier | yes | 55 | 668 |
-| BanglaT5 | `checkpoints/banglat5` | seq2seq | yes | 4 | 67 |
-| mT5-small | `checkpoints/mt5_small` | seq2seq | yes | 3 | 42 |
-| mT5-base | `checkpoints/mt5_base` | seq2seq | yes | 2 | 24 |
-| BanglaBERT | `checkpoints/banglabert_cand` | candidate scorer | yes | 71 | 1001 |
-| BanglaBERT-large | `checkpoints/banglabert_large_cand` | candidate scorer | yes | 41 | 327 |
-| XLM-R-large | `checkpoints/xlm_roberta_large_cand` | candidate scorer | yes | 49 | 306 |
-| BanglaT5 target-only | `checkpoints/_runs/banglat5/abl_output_target_keep/seed42` | seq2seq | yes | 12 | 205 |
-
-If a checkpoint does not support batching (a model type not listed above, or `"batch": false` in its
-`heteronym_config.json`), the package prints a warning when loading it
-
-```
-UserWarning: <checkpoint> does not support batch inference; the *_batch methods will process their inputs one at a time
-```
-
-and the `*_batch` methods still work, one input at a time. `reader.supports_batch` tells which case applies.
-
-### Using it from another project (without the package)
-
-There is no package to install: put this repo on the Python path and load a kept checkpoint once (loading takes a few
-seconds; keep the `Predictor` and reuse it).
-
-```python
-import sys
-sys.path.insert(0, "/path/to/bangla-heteronym-benchmark")
-from src.predict import Predictor
-
-p = Predictor.load("/path/to/bangla-heteronym-benchmark/checkpoints/banglabert")   # device="cpu" or "cuda" (default: cuda if available)
-```
-
-Three ways to call it:
-
-| You have | Call | You get |
-|---|---|---|
-| any text, nothing marked | `p.phoneticize(text)` | the same text with **every** known heteronym replaced by its reading |
-| a sentence and the word, the word occurs once | `p.predict(sentence, "কর")` | only the reading of that word (its first occurrence) |
-| a sentence with the target marked | `p.predict_marked("... [কর] ...")` | only the reading of the marked occurrence |
-| a text with one or more words marked | `p.phoneticize_marked("... [কর] ...")` | the whole text, only the marked words replaced, marks removed |
-
-```python
-p.phoneticize("আগে কর কাজটা, তারপর আবার কর। বিকেলে মাঠে বল নিয়ে যাব।")
-# 'আগে কোরো কাজটা, তারপর আবার করো। বিকেলে মাঠে বল্‌ নিয়ে যাব।'
-
-p.predict("সময়মতো কর না দিলে জরিমানা গুনতে হবে।", "কর")             # 'কর্‌'
-p.predict_marked("সরকার কর বাড়িয়েছে, তাই হিসাবটা আবার [কর]।")       # 'করো'  (the second কর; predict() would read the first)
-p.predict_marked("মাঠে যাওয়ার সময় <<বল>> নিয়ে যেও।", marks=("<<", ">>"))  # বল্‌; other marks if [ ] can occur
-```
-
-Input rules:
-
-- Pass normal Bangla text (Unicode, as typed). No marking is needed for `phoneticize` and `predict`.
-- Mark only when a word occurs more than once and you want a specific occurrence: put the mark directly around the
-  word, without spaces (`[কর]`, not `[ কর ]`), and mark one word per call.
-- The marked word must be one of the 183 heteronyms (`data/raw/bangla_heteronym_words.csv`); otherwise a
-  `ValueError` is raised. `phoneticize` simply leaves other words unchanged.
-- You can pass a whole paragraph: sentences are split at `।`, `?`, `!` and newlines, and each heteronym is read from
-  its own sentence (the model was trained on single sentences).
-- Outputs keep the ZWNJ of readings such as `কর্‌` (hasanta + U+200C); keep it if the text goes to a TTS front end.
-- `p.phoneticize_detailed(text)` also returns, per heteronym, its character position, reading and confidence, and
-  `p.predict_items([(sentence, start, end, word)])` takes character offsets if you locate the words yourself.
-- Every call has a batch version that takes and returns lists: `p.phoneticize_batch(texts)`,
-  `p.phoneticize_detailed_batch(texts)`, `p.predict_batch([(sentence, word), ...])`, `p.predict_marked_batch(texts)`,
-  `p.phoneticize_marked_batch(texts)`.
-  All occurrences go through the model together (64 per forward pass), which is about 10 times faster on the GPU than
-  a loop of single calls.
-
-Which checkpoint: `checkpoints/banglabert` is the most accurate classifier (99.46%, ~12.5 ms on the T4, ~33 ms on 4 CPU
-threads); `checkpoints/banglabert_small` is the fastest on a CPU (98.16%, 13 ms); `checkpoints/banglabert_large_cand`
-(candidate scoring) is the most accurate (99.73%) but about 2 times slower on the GPU (23.8 ms) and 4 times slower on a CPU
-(139 ms). All are used the same way.
-
-### What the model is called with
-
-In short: the model always receives **one sentence with the target word marked by `@`**, and returns **the reading
-of that one word**. Whatever method you call, our code only chooses the words, builds this input, and afterwards
-returns the reading or puts it back into your text.
+**What the model receives and returns.** Every method sends the model one sentence with the target word marked by
+`@` and gets back the reading of that word; the methods only choose which words to send, and your `[ ]` marks never
+reach the model. With `checkpoints/banglabert` for `... তাই তুমি এখনই হিসাবটা আবার [কর]।`:
 
 | Model type | The model receives | The model returns | We take |
 |---|---|---|---|
-| Encoder (BanglaBERT etc., recommended) | the word + the marked sentence: `কর` + `সরকার কর বাড়িয়েছে, তাই তুমি এখনই হিসাবটা আবার @ কর @।` | one probability per reading: `কর্‌ 0.0003, করো 0.9699, কোরো 0.0298` | the highest: **করো** |
-| Candidate scorer (`*_cand`) | the marked sentence once per reading: `... আবার @ কর @।` + `কর্‌` / `করো` / `কোরো` | one score per pair: `0.0001, 0.9995, 0.0005` | the highest: **করো** |
-| Seq2seq (BanglaT5, mT5) | `phonetic: সরকার কর বাড়িয়েছে, তাই তুমি এখনই হিসাবটা আবার @ কর @।` | the whole sentence rewritten: `সরকার কর বাড়িয়েছে, তাই তুমি এখনই হিসাবটা আবার করো।` | the word at the marked position: **করো** |
+| Encoder | `কর` + `সরকার কর বাড়িয়েছে, তাই তুমি এখনই হিসাবটা আবার @ কর @।` | `কর্‌ 0.0003, করো 0.9699, কোরো 0.0298` | the highest: **করো** |
+| Candidate scorer | the marked sentence + `কর্‌` / `করো` / `কোরো` (one row each) | `0.0001, 0.9995, 0.0005` | the highest: **করো** |
+| Seq2seq | `phonetic: সরকার কর বাড়িয়েছে, তাই তুমি এখনই হিসাবটা আবার @ কর @।` | `সরকার কর বাড়িয়েছে, তাই তুমি এখনই হিসাবটা আবার করো।` | the word at `@`: **করো** |
 
-In detail:
+The package README and `demo.py` show this for every method and model type.
 
-Every method ends in the same model call. The methods only differ in how they pick the words to read:
+**Batch inference** is supported by all checkpoints: BanglaBERT-small, BanglaBERT, Bangla-BERT-base, MuRIL-base,
+XLM-R-base, IndicBERTv2-MLM, mDeBERTa-v3-base, BanglaBERT-large, XLM-R-large, BanglaT5, mT5-small, mT5-base and the
+three candidate scorers. The `*_batch` methods send up to 64 words per model call (about 10 times faster than a loop
+on the GPU); a checkpoint without batch support would give a warning and run one input at a time.
 
-| Method | Words sent to the model |
-|---|---|
-| `phoneticize(text)` | every heteronym found in the text |
-| `predict(sentence, word)` | the first whole-word occurrence of `word` |
-| `predict_marked(text)` | the first marked word (marks removed) |
-| `phoneticize_marked(text)` | every marked word (marks removed) |
-| `*_batch([...])` | the same, for all inputs together |
+**Which checkpoint:** `banglabert` (99.46%, 12.5 ms on the T4, 33 ms on 4 CPU threads) in general,
+`banglabert_small` on a CPU (98.16%, 13 ms), `banglabert_large_cand` for the best accuracy (99.73%, 23.8 / 139 ms).
 
-Each chosen word becomes one item `(sentence, start, end, word)`: the sentence that contains it (text split at `।`,
-`?`, `!` and newlines, at most 32 words kept on each side) and the word's character span. Items are padded into
-batches of up to 64 and each batch is one model call (one forward pass, or one `generate` call for seq2seq). Before the
-call the sentence is normalized (`csebuetnlp/normalizer`, BanglaBERT and BanglaT5 checkpoints only; the T5 models also
-drop the ZWNJ, which their tokenizers cannot keep) and the chosen word is wrapped in the training-time marker `@ word @`.
-Nothing else is added or removed.
+## 7. Results
 
-Real calls for `predict_marked("সরকার কর বাড়িয়েছে, তাই তুমি এখনই হিসাবটা আবার [কর]।")`, item
-`("সরকার কর বাড়িয়েছে, তাই তুমি এখনই হিসাবটা আবার কর।", 48, 50, "কর")`:
-
-**Encoder classifier** (`checkpoints/banglabert`, tokens as the tokenizer prints them). Input is the pair (word, marked
-sentence); the model returns one score per reading slot (slots the word does not have are masked); the reading is the
-argmax:
-
-```text
-[CLS] কর [SEP] সরকার কর বাড়িয়েছে , তাই তুমি এখনই হিসাব ##টা আবার @ কর @ । [SEP]
-softmax over কর্‌ / করো / কোরো: 0.0003 / 0.9699 / 0.0298   ->  করো
-```
-
-**Candidate scorer** (`checkpoints/banglabert_cand`). One pair (marked sentence, candidate reading) per reading, all
-in the same batch; one score each; the reading is the argmax:
-
-```text
-[CLS] সরকার কর বাড়িয়েছে , তাই তুমি এখনই হিসাব ##টা আবার @ কর @ । [SEP] কর্ [SEP]
-[CLS] সরকার কর বাড়িয়েছে , তাই তুমি এখনই হিসাব ##টা আবার @ কর @ । [SEP] করো [SEP]
-[CLS] সরকার কর বাড়িয়েছে , তাই তুমি এখনই হিসাব ##টা আবার @ কর @ । [SEP] কোরো [SEP]
-softmax: 0.0001 / 0.9995 / 0.0005   ->  করো
-```
-
-**Seq2seq** (`checkpoints/banglat5`). Input is text; the model generates the whole sentence with the word respelled
-(greedy decoding); the generated word at the target's position is matched to the word's readings:
-
-```text
-input    : phonetic: সরকার কর বাড়িয়েছে, তাই তুমি এখনই হিসাবটা আবার @ কর @।
-generated: সরকার কর বাড়িয়েছে, তাই তুমি এখনই হিসাবটা আবার করো।
-->  করো
-```
-
-The other words of the sentence (here the first কর) are only context. Afterwards the reading is put back at the word's
-position in your text (the `phoneticize*` methods) or returned on its own (the `predict*` methods); that part is plain
-string replacement.
-
-`phoneticize` splits the text on `।`, `?`, `!` and newlines, finds every whole-word occurrence of a known
-heteronym, marks one occurrence at a time, predicts all of them in one batch and rebuilds the exact text.
-
-Kept checkpoints (not committed, `checkpoints/` is git-ignored): `checkpoints/{model}` is the best `main` seed of
-each model, `checkpoints/{model}_cand` the best `cand_main` seed. All other runs' checkpoints are deleted after
-evaluation (`checkpoints/_runs/` holds them while a run is in progress).
-
-## 9. Results
-
-Full tables: [results/summary.md](results/summary.md), [results/latency.csv](results/latency.csv),
-[results/ablations.md](results/ablations.md), [results/learning_curve.csv](results/learning_curve.csv),
-plots in [results/plots/](results/plots/), and [EXPERIMENT_LOG.md](EXPERIMENT_LOG.md) for observations.
-
-Plots (`results/plots/`, redrawn by `python -m scripts.aggregate`; blue = encoder, orange = seq2seq, filled =
-Bangla-only, hollow = multilingual, error bars = std over seeds):
-
-| File | Shows |
-|---|---|
-| `accuracy_vs_params.png` | main-split test accuracy against parameter count |
-| `accuracy_vs_latency_gpu.png`, `accuracy_vs_latency_cpu.png` | test accuracy against p50 latency per sentence (T4 / 4 CPU threads); the dashed line joins the models that no faster model beats |
-| `learning_curves.png` | one panel per model, test accuracy at 2 / 5 / 10 / 14 sentences per pronunciation (seed 42), other models in gray; a point below 80% is an arrow at the bottom edge with its value |
-| `hardest_words.png` | the 20 words with the lowest test accuracy, averaged over all models and seeds |
-
-The scatter plots show the main benchmark only; candidate scoring, the unseen split and the ablations are in the
-tables below and in `summary.md` / `ablations.md`.
+Main split test set (1,104 sentences), mean ± std over 3 seeds; latency p50 per sentence at batch 1. Full tables in
+[results/summary.md](results/summary.md), [results/latency.csv](results/latency.csv),
+[results/ablations.md](results/ablations.md) and [results/learning_curve.csv](results/learning_curve.csv); plots in
+[results/plots/](results/plots/) (accuracy against size and latency, learning curves, hardest words).
 
 <!-- results-table -->
 | # | model | size | precision | best lr | test acc (%) | macro-F1 (%) | train time / seed (min) | GPU p50 (ms) | CPU p50 (ms, 4 thr) |
@@ -718,12 +181,11 @@ tables below and in `summary.md` / `ablations.md`.
 | 12 | mt5_base | 582.4M | fp32 | 0.0003 | 96.11 ± 0.16 | 95.99 ± 0.24 | 124.6 | 436.2 | 1758.6 |
 <!-- /results-table -->
 
-The table between the `results-table` markers (here and in EXPERIMENT_LOG.md) is rewritten by `scripts.aggregate`;
-don't edit it by hand.
+The table between the `results-table` markers is rewritten by `scripts.aggregate`; don't edit it by hand.
 
 ### Further experiments
 
-Accuracy in %, mean ± std over seeds 42/43/44; GPU p50 in ms (Tesla T4, batch 1, full path).
+Accuracy in %, mean ± std over 3 seeds; GPU p50 in ms.
 
 **Candidate scoring and unseen words** (`cand_main`, `cand_unseen`, `unseen`). The unseen test set has 1,500
 sentences of 37 words that never occur in training or dev.
@@ -740,12 +202,10 @@ sentences of 37 words that never occur in training or dev.
 | mt5_small | seq2seq | 93.36 ± 0.21 | 51.69 ± 0.63 | 307.6 |
 | mt5_base | seq2seq | 96.11 ± 0.16 | 58.07 ± 0.88 | 436.2 |
 
-- XLM-R-large candidate runs collapsed in 3 of 6 runs (main seed 44: 55.8%; unseen seeds 42 and 43: about 50%):
-  the training loss stayed at the two-candidate chance level until early stopping. They are kept in the mean
-  (owner's decision, 2026-10-20); the converged seeds reach 97.0/97.1% (main) and 86.5% (unseen).
-- On unseen words the seq2seq models write one of the word's readings in only 68-74% of the sentences (otherwise
-  an invented pronunciation); when they do, it is the right one 76-81% of the time. The candidate scorer always
-  picks one of the readings, which is why it generalizes much better.
+- XLM-R-large failed to train as a candidate scorer in 3 of 6 runs (loss stuck at chance level, about 50% accuracy);
+  they are kept in the mean. Its converged runs reach 97.0/97.1% (main) and 86.5% (unseen).
+- On unseen words the seq2seq models produce one of the word's readings in only 68-74% of the sentences (otherwise an
+  invented pronunciation); the candidate scorer always picks one of the readings, so it generalizes much better.
 
 **Learning curve** (seed 42 only; 14 is the seed-42 main run), test accuracy by sentences per pronunciation:
 
@@ -764,17 +224,15 @@ sentences of 37 words that never occur in training or dev.
 | xlm_roberta_large | 90.94 | 95.65 | 97.64 | 98.28 |
 | mt5_base | 80.98 | 92.03 | 95.47 | 96.20 |
 
-Going from 2 to 5 sentences per pronunciation gives the largest gain for every model except BanglaBERT-small
-(which gains more from 5 to 10). At 10, every encoder except MuRIL is within 1.5 points of its result at 14, and
-three models (BanglaT5, XLM-R-base, mDeBERTa) are slightly higher at 10 than at 14, which is within single-seed
-noise. mT5-small needs the most data (52.7% at 2).
+The biggest gain is from 2 to 5 sentences per pronunciation. At 10, every encoder except MuRIL is within 1.5 points
+of its result at 14; mT5-small needs the most data.
 
 **Ablations** (BanglaBERT-large and BanglaT5, 3 seeds; [results/ablations.md](results/ablations.md)): no marker
 99.67 ± 0.10 and mean pooling of the target tokens 99.52 ± 0.14 beat the default `@ word @` marker with the
 opening-marker head (99.18 ± 0.16); `<h>` tokens 99.34 ± 0.14; `[CLS]` 99.09 ± 0.31. BanglaT5 writing only the
 target's pronunciation: 98.28 ± 0.47 (full sentence 98.37 ± 0.18) at 86.1 ms GPU p50 instead of 236.8 ms.
 
-## 10. Things to know (pitfalls found while building this)
+## 8. Notes
 
 - **ZWNJ after hasanta.** No tokenizer here round-trips it (`results/tokenizer_zwnj.csv`). WordPiece models
   (BanglaBERT, bangla-bert-base, MuRIL) silently drop it; SentencePiece models give different ids but cannot decode
@@ -786,8 +244,8 @@ target's pronunciation: 98.28 ± 0.47 (full sentence 98.37 ± 0.18) at 86.1 ms G
 - **Word boundaries.** Python's `\b` does not work for Bangla (vowel signs are not word characters), so heteronyms are
   found with an explicit boundary set (`BOUNDARY_CHARS` in `src/data.py`: `।`, `॥`, ASCII punctuation, curly quotes,
   dashes, whitespace).
-- **Normalizer.** Inputs go through the csebuetnlp normalizer (pinned git commit in `requirements.txt`) before
-  tokenization, as the BanglaBERT/BanglaT5 authors recommend.
+- **Normalizer.** BanglaBERT (all sizes) and BanglaT5 inputs go through the csebuetnlp normalizer (pinned git commit
+  in `requirements.txt`) before tokenization, as their authors recommend.
 - **Automatic fallbacks** (`src/train.py`, recorded in `config.json` under `adjustments` and in EXPERIMENT_LOG):
   on CUDA OOM the batch is halved and gradient accumulation doubled (same effective batch), then gradient
   checkpointing; on a non-finite fp16 loss the run restarts in fp32. mT5, mDeBERTa and BanglaT5 are set to fp32 in their
@@ -795,15 +253,15 @@ target's pronunciation: 98.28 ± 0.47 (full sentence 98.37 ± 0.18) at 86.1 ms G
 - **Seq2seq memory at evaluation.** Generation scores are collected with a small logits processor
   (`GreedyLogProbs`) instead of `output_scores`, which kept the whole vocabulary distribution per step and ran out of
   memory for mT5.
-- **Shared GPU (original server).** Two idle Triton inference services also live on the T4. They are stopped while
-  the largest models train (to free memory) and are running, idle, during every latency measurement, so all latency
-  numbers share the same conditions.
+- **Shared GPU (original server).** Two idle Triton inference services also live on the T4. They were stopped while
+  the three largest models and all further experiments trained (to free memory) and were running, idle, during every
+  latency measurement, so all latency numbers share the same conditions.
 - **mT5 epoch limit.** Both mT5 models were still improving at the 15-epoch limit; their numbers are a lower bound
   under this shared recipe.
 - **Reproducibility.** Splits, configs and seeds are fixed; `config.json` records package versions and the git commit
   of every run. Results are reproducible up to GPU non-determinism (expect differences within the seed std).
 
-## 11. Adding a model or data
+## 9. Adding a model or data
 
 - **New model:** copy a config in `configs/` with the same `model_type`, set `model_name`, `model_id`, `precision`,
   `batch_size` and `lr_grid`; run `bash scripts/smoke.sh <model>` first, then `bash scripts/run_model.sh <model>`, and
@@ -812,7 +270,7 @@ target's pronunciation: 98.28 ± 0.47 (full sentence 98.37 ± 0.18) at 86.1 ms G
   new splits (a new split seed or folder, never overwriting the old ones) and re-running every model, otherwise the
   numbers are not comparable. The learning curve tells roughly how many sentences per pronunciation to write.
 
-## 12. Repo layout
+## 10. Repo layout
 
 ```
 configs/        one YAML per model
@@ -829,7 +287,7 @@ logs/           training logs (not committed)
 results/        aggregated tables and plots
 ```
 
-## 13. Prepared by
+## 11. Prepared by
 
 **Kawshik Kumar Paul**  
 Senior Software Engineer | Researcher  
