@@ -393,8 +393,7 @@ Bangla-only, hollow = multilingual, error bars = std over seeds):
 | `hardest_words.png` | the 20 words with the lowest test accuracy, averaged over all models and seeds |
 
 The scatter plots show the main benchmark only; candidate scoring, the unseen split and the ablations are in the
-tables below and in `summary.md` / `ablations.md`. The paper draws its figures from the same files
-(`scripts/paper_assets.py`).
+tables below and in `summary.md` / `ablations.md`.
 
 <!-- results-table -->
 | # | model | size | precision | best lr | test acc (%) | macro-F1 (%) | train time / seed (min) | GPU p50 (ms) | CPU p50 (ms, 4 thr) |
