@@ -85,6 +85,9 @@ class HeteronymModelReader(HeteronymReader):
 
     def _read(self, items: list[tuple[str, int, int, str]]) -> list[str]:
         """The reading for each (sentence, start, end, word); one model call per batch_size items (1 = sequential)."""
+        # Every public method ends here. Each item is one sentence and one word in it, e.g.
+        #   ("সরকার কর বাড়িয়েছে, তাই তুমি এখনই হিসাবটা আবার কর।", 48, 50, "কর")
+        # and each comes back as that word's reading, e.g. "করো".
         readings = []
         for i in range(0, len(items), self.batch_size):
             chunk = items[i:i + self.batch_size]
@@ -92,19 +95,35 @@ class HeteronymModelReader(HeteronymReader):
                 if self.config["model_type"] == "seq2seq":
                     readings += self._read_seq2seq(chunk)
                 else:
-                    batch = encoder_batch(self.tokenizer, chunk, self.config, self.norm, self.tokenizer.pad_token_id)
-                    best = self.model(**{k: v.to(self.device) for k, v in batch.items()}).argmax(-1).tolist()
-                    readings += [self.heteronyms[w][k] for (*_, w), k in zip(chunk, best)]
+                    readings += self._read_encoder(chunk)
         return readings
 
+    def _read_encoder(self, items) -> list[str]:
+        """Encoder classifier and candidate scorer."""
+        batch = encoder_batch(self.tokenizer, items, self.config, self.norm, self.tokenizer.pad_token_id)
+        # MODEL CALL. Input, one row per item (tokens as the BanglaBERT tokenizer prints them):
+        #   encoder:   [CLS] কর [SEP] সরকার কর বাড়িয়েছে , তাই তুমি এখনই হিসাব ##টা আবার @ কর @ । [SEP]
+        #   candidate: one row per reading of the word, all scored in this same call:
+        #              [CLS] সরকার কর বাড়িয়েছে , তাই তুমি এখনই হিসাব ##টা আবার @ কর @ । [SEP] কর্ [SEP]
+        #              [CLS] ... আবার @ কর @ । [SEP] করো [SEP]
+        #              [CLS] ... আবার @ কর @ । [SEP] কোরো [SEP]
+        # Output: scores of shape (items, 3), one per reading slot (slots the word does not have are masked), e.g.
+        #   encoder: [-4.36, 3.86, 0.37] = softmax 0.0003 / 0.9699 / 0.0298 for কর্‌ / করো / কোরো -> argmax 1 -> করো
+        #   candidate: softmax 0.0001 / 0.9995 / 0.0005 -> argmax 1 -> করো
+        scores = self.model(**{k: v.to(self.device) for k, v in batch.items()})
+        return [self.heteronyms[w][k] for (*_, w), k in zip(items, scores.argmax(-1).tolist())]
+
     def _read_seq2seq(self, items) -> list[str]:
-        """Generates the whole sentence with the word respelled and takes the word at the target's position."""
+        """Seq2seq (BanglaT5, mT5)."""
         inputs = ["phonetic: " + mark(s, a, b, self.config["marker"], self.norm)[0] for s, a, b, _ in items]
         batch = self.tokenizer(inputs, padding=True, truncation=True, max_length=self.config["max_length"], return_tensors="pt")
+        # MODEL CALL. Input, one text per item:  phonetic: সরকার কর বাড়িয়েছে, তাই তুমি এখনই হিসাবটা আবার @ কর @।
+        # Output, one text per item (greedy):    সরকার কর বাড়িয়েছে, তাই তুমি এখনই হিসাবটা আবার করো।
+        # The generated word at the target's position (করো) is matched to the word's readings below.
         output = self.model.generate(**batch.to(self.device), max_new_tokens=self.config["max_length"], num_beams=1, do_sample=False)
         readings = []
         for text, (sentence, start, _, word) in zip(self.tokenizer.batch_decode(output, skip_special_tokens=True), items):
-            if self.config["output"] == "target":
+            if self.config["output"] == "target":  # target-only checkpoint: the output is just the reading
                 generated = strip_punct(text)
             else:
                 token, piece = target_piece(sentence, start)

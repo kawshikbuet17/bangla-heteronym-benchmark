@@ -101,6 +101,19 @@ class Predictor:
         return {k: v.to(self.device) for k, v in batch.items()}
 
     def forward(self, batch: dict[str, torch.Tensor]):
+        # MODEL CALL. Every public method ends here (via predict_items), with one row per item: one sentence and one
+        # word in it, e.g. ("সরকার কর বাড়িয়েছে, তাই তুমি এখনই হিসাবটা আবার কর।", 48, 50, "কর"). Built by encode():
+        #   encoder input:   [CLS] কর [SEP] সরকার কর বাড়িয়েছে , তাই তুমি এখনই হিসাব ##টা আবার @ কর @ । [SEP]
+        #   encoder output:  scores (items, 3), one per reading slot, slots the word lacks masked, e.g. [-4.36, 3.86, 0.37]
+        #                    = softmax 0.0003 / 0.9699 / 0.0298 for কর্‌ / করো / কোরো -> decode() picks করো
+        #   candidate input: one row per reading of the word, all scored in this same call:
+        #                    [CLS] সরকার কর বাড়িয়েছে , তাই তুমি এখনই হিসাব ##টা আবার @ কর @ । [SEP] কর্ [SEP]
+        #                    [CLS] ... আবার @ কর @ । [SEP] করো [SEP]   and   [CLS] ... আবার @ কর @ । [SEP] কোরো [SEP]
+        #   candidate output: scores (items, 3), e.g. softmax 0.0001 / 0.9995 / 0.0005 -> করো
+        #   seq2seq input:   phonetic: সরকার কর বাড়িয়েছে, তাই তুমি এখনই হিসাবটা আবার @ কর @।
+        #   seq2seq output:  generated token ids (greedy) = "সরকার কর বাড়িয়েছে, তাই তুমি এখনই হিসাবটা আবার করো।", plus the
+        #                    log-probability of each generated token (for the confidence); decode() takes the word at
+        #                    the target's position (করো) and matches it to the word's readings
         with torch.inference_mode():
             if self.kind == "seq2seq":
                 recorder = GreedyLogProbs()

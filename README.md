@@ -434,6 +434,18 @@ threads); `checkpoints/banglabert_small` is the fastest on a CPU (98.16%, 13 ms)
 
 ### What the model is called with
 
+In short: the model always receives **one sentence with the target word marked by `@`**, and returns **the reading
+of that one word**. Whatever method you call, our code only chooses the words, builds this input, and afterwards
+returns the reading or puts it back into your text.
+
+| Model type | The model receives | The model returns | We take |
+|---|---|---|---|
+| Encoder (BanglaBERT etc., recommended) | the word + the marked sentence: `কর` + `সরকার কর বাড়িয়েছে, তাই তুমি এখনই হিসাবটা আবার @ কর @।` | one probability per reading: `কর্‌ 0.0003, করো 0.9699, কোরো 0.0298` | the highest: **করো** |
+| Candidate scorer (`*_cand`) | the marked sentence once per reading: `... আবার @ কর @।` + `কর্‌` / `করো` / `কোরো` | one score per pair: `0.0001, 0.9995, 0.0005` | the highest: **করো** |
+| Seq2seq (BanglaT5, mT5) | `phonetic: সরকার কর বাড়িয়েছে, তাই তুমি এখনই হিসাবটা আবার @ কর @।` | the whole sentence rewritten: `সরকার কর বাড়িয়েছে, তাই তুমি এখনই হিসাবটা আবার করো।` | the word at the marked position: **করো** |
+
+In detail:
+
 Every method ends in the same model call. The methods only differ in how they pick the words to read:
 
 | Method | Words sent to the model |
