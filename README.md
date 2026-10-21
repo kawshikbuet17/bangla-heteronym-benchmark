@@ -382,6 +382,20 @@ Full tables: [results/summary.md](results/summary.md), [results/latency.csv](res
 [results/ablations.md](results/ablations.md), [results/learning_curve.csv](results/learning_curve.csv),
 plots in [results/plots/](results/plots/), and [EXPERIMENT_LOG.md](EXPERIMENT_LOG.md) for observations.
 
+Plots (`results/plots/`, redrawn by `python -m scripts.aggregate`; blue = encoder, orange = seq2seq, filled =
+Bangla-only, hollow = multilingual, error bars = std over seeds):
+
+| File | Shows |
+|---|---|
+| `accuracy_vs_params.png` | main-split test accuracy against parameter count |
+| `accuracy_vs_latency_gpu.png`, `accuracy_vs_latency_cpu.png` | test accuracy against p50 latency per sentence (T4 / 4 CPU threads); the dashed line joins the models that no faster model beats |
+| `learning_curves.png` | one panel per model, test accuracy at 2 / 5 / 10 / 14 sentences per pronunciation (seed 42), other models in gray; a point below 80% is an arrow at the bottom edge with its value |
+| `hardest_words.png` | the 20 words with the lowest test accuracy, averaged over all models and seeds |
+
+The scatter plots show the main benchmark only; candidate scoring, the unseen split and the ablations are in the
+tables below and in `summary.md` / `ablations.md`. The paper draws its figures from the same files
+(`scripts/paper_assets.py`).
+
 <!-- results-table -->
 | # | model | size | precision | best lr | test acc (%) | macro-F1 (%) | train time / seed (min) | GPU p50 (ms) | CPU p50 (ms, 4 thr) |
 |---|---|---|---|---|---|---|---|---|---|
