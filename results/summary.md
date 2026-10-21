@@ -69,6 +69,7 @@ Accuracy and macro-F1 in %, mean ± std over seeds. Latency: batch 1, full path,
 | mt5_small | seq2seq | 300.2M | fp32 | 16x1 | 0.0003 | 1 | 92.66 | 92.17 | 92.9 / 77.8 | 0.0 | 43.0 | 15.0 | 307.6 | 923.6 | 1609.4 |
 | banglabert_large | encoder | 335.6M | fp16 | 16x2 | 2e-05 | 1 | 98.73 | 98.66 | 98.9 / 88.9 |  | 10.3 | 10.0 | 22.8 | 107.8 | 301.8 |
 | xlm_roberta_large | encoder | 559.9M | fp16 | 8x4 | 2e-05 | 1 | 97.64 | 97.51 | 97.7 / 94.4 |  | 18.4 | 10.0 | 17.8 | 126.4 | 380.8 |
+| mt5_base | seq2seq | 582.4M | fp32 | 8x2 | 0.0003 | 1 | 95.47 | 95.24 | 95.6 / 88.9 | 0.1 | 98.3 | 15.0 | 436.2 | 1758.6 | 2815.2 |
 
 ## lc2 / test
 
