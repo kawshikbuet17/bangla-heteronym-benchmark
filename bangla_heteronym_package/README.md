@@ -89,6 +89,9 @@ They are read from the environment, else from `.env` in this folder. A path or d
 - Plain Unicode Bangla. Mark a word when you want only that occurrence read: `[কর]`, no spaces inside the marks.
   `predict_marked` reads the first marked word; `phoneticize_marked` replaces every marked word.
 - Do not pass marked text to `phoneticize`: it reads every heteronym and keeps the marks as punctuation.
+- The marks only choose the occurrence: they are removed, and the model reads that sentence with its own training-time
+  marker around the word (`... আবার @ কর @।`), as for every word `phoneticize` finds. The reading comes from the model;
+  only putting it back into the text is string replacement.
 - A word that is not one of the 183 heteronyms, or not in the text, raises `ValueError` (in `predict` and
   `predict_marked`); `phoneticize` leaves all other words unchanged.
 - Paragraphs are fine: each heteronym is read from its own sentence (split at `।`, `?`, `!` and newlines).

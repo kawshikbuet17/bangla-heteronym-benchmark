@@ -303,6 +303,11 @@ print(predictor.phoneticize(text))                        # every heteronym repl
 print(predictor.predict("তুমি গ্রাফ পেপারে সরলরেখাটা আঁক।", "আঁক"))   # আঁকো
 print(predictor.predict("সময়মতো কর না দিলে জরিমানা গুনতে হবে।", "কর"))  # কর্‌
 
+# Marked input: mark the occurrence(s) you want read with [ ] (or marks=("<<", ">>"))
+print(predictor.predict_marked("সরকার কর বাড়িয়েছে, তাই হিসাবটা আবার [কর]।"))       # করো (only the reading)
+print(predictor.phoneticize_marked("সরকার কর বাড়িয়েছে, তাই হিসাবটা আবার [কর]।"))   # whole text, only marked words replaced:
+# সরকার কর বাড়িয়েছে, তাই হিসাবটা আবার করো।
+
 phonetic, details = predictor.phoneticize_detailed("বিকেলে মাঠে বল নিয়ে খেলব, কাল আবার দেখা হবে।")
 # phonetic: বিকেলে মাঠে বল্‌ নিয়ে খেলব, কাল্‌ আবার দেখা হবে।
 # details:  [{'word': 'বল', 'position': 12, 'prediction': 'বল্‌', 'confidence': 0.9997},
@@ -426,6 +431,11 @@ Which checkpoint: `checkpoints/banglabert` is the most accurate classifier (99.4
 threads); `checkpoints/banglabert_small` is the fastest on a CPU (98.16%, 13 ms); `checkpoints/banglabert_large_cand`
 (candidate scoring) is the most accurate (99.73%) but about 2 times slower on the GPU (23.8 ms) and 4 times slower on a CPU
 (139 ms). All are used the same way.
+
+How marked input works: the marks only choose which occurrence to read. They are removed before the model runs, and
+the model gets that sentence with its own training-time marker around the chosen word (`... আবার @ কর @।` for the
+encoders, `phonetic: ... আবার @ কর @।` for seq2seq), exactly as for every occurrence that `phoneticize` finds by
+itself. The reading is the model's prediction; putting it back into the text is plain string replacement.
 
 `phoneticize` splits the text on `।`, `?`, `!` and newlines, finds every whole-word occurrence of a known
 heteronym, marks one occurrence at a time, predicts all of them in one batch and rebuilds the exact text.
