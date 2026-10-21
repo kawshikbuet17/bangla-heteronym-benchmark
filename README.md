@@ -64,6 +64,38 @@ so the points are comparable. "14" on a learning curve is simply the main run.
 A real-text test set can be added as `data/real_test.csv` (same columns); every later run also reports it, and for
 existing checkpoints use `src.evaluate` (section 6).
 
+### Sample rows
+
+`data/raw/bangla_heteronym_dataset.csv` has one row per sentence; `sentence_phonetic` is the sentence with only the
+target replaced by its pronunciation (here the three readings of কর):
+
+```csv
+spelling,pronunciation,sentence,sentence_phonetic
+কর,কর্‌,এ বছর থেকে মোবাইল ফোনের ওপর কর বাড়ছে।,এ বছর থেকে মোবাইল ফোনের ওপর কর্‌ বাড়ছে।
+কর,করো,"তুমি এখনই খাতাটা খুলে আজকের হোমওয়ার্কের অঙ্কগুলো শেষ কর, তারপর যত খুশি টিভি দেখবে।","তুমি এখনই খাতাটা খুলে আজকের হোমওয়ার্কের অঙ্কগুলো শেষ করো, তারপর যত খুশি টিভি দেখবে।"
+কর,কোরো,"পরীক্ষার হলে তুমি প্রশ্ন ভালোভাবে না পড়ে উত্তর লেখা শুরু কর না, তাতে ভুল বেশি হয়।","পরীক্ষার হলে তুমি প্রশ্ন ভালোভাবে না পড়ে উত্তর লেখা শুরু কোরো না, তাতে ভুল বেশি হয়।"
+```
+
+`data/raw/bangla_heteronym_words.csv` lists each word's readings; their order defines the label index (0, 1, 2):
+
+```csv
+spelling,pronunciation 1,pronunciation 2,pronunciation 3
+আঁক,আঁক্‌,আঁকো,
+আসর,আশোর,আসোর,
+```
+
+The split files (`data/splits/*.csv`) have the same four columns. `src.data.load_split` adds the target's character
+span, its whitespace-token index, the label and the number of readings. One training row:
+
+```python
+{'spelling': 'কর', 'pronunciation': 'করো',
+ 'sentence': 'হাত-মুখ ধুয়ে তুমি খাওয়া শুরু কর।', 'sentence_phonetic': 'হাত-মুখ ধুয়ে তুমি খাওয়া শুরু করো।',
+ 'start': 31, 'end': 33, 'token_idx': 5, 'label': 1, 'n_readings': 3}
+```
+
+`label` 1 is the second reading of কর in the words file (কর্‌, **করো**, কোরো). Readings ending in `্` are stored as hasanta +
+ZWNJ (U+200C); keep it when copying them.
+
 ## 4. Approaches
 
 The target word is marked in the input as `@ word @` (the marker), so the model knows which occurrence is meant.
@@ -74,7 +106,77 @@ The target word is marked in the input as `@ word @` (the marker), so the model 
 | `candidate` | candidate scoring: one (marked sentence, candidate pronunciation) pair per candidate, one score each, softmax over the word's candidates; works for words never seen in training | softmax probability |
 | `seq2seq` | input `phonetic: <marked sentence>`, the model writes the whole sentence back with the target replaced by its pronunciation (greedy decoding); the generated word is mapped back to a candidate, and an output that matches no candidate counts as wrong | exp(mean token log-prob) |
 
-All models are wrapped by `src.predict.Predictor`, so a checkpoint of any type is used the same way (section 7).
+All models are wrapped by `src.predict.Predictor`, so a checkpoint of any type is used the same way (section 8).
+
+### What a model sees and produces (training, dev and test)
+
+Training, dev evaluation, testing and inference build the input in exactly the same way (`src/models.py`). For the
+training row above (`হাত-মুখ ধুয়ে তুমি খাওয়া শুরু কর।`, target কর, gold করো):
+
+**`encoder` (BanglaBERT shown, tokens as the tokenizer prints them).** Input is the pair (word, marked sentence); the
+head reads the opening `@` (token 10); the output is one score per reading slot, masked to the word's readings;
+training target = the label:
+
+```text
+[CLS] কর [SEP] হাত - মুখ ধুয়ে তুমি খাওয়া শুরু @ কর @ । [SEP]
+candidates: ['কর্‌', 'করো', 'কোরো']   cand_mask: [True, True, True]   label: 1   ->  prediction করো
+```
+
+**`candidate`.** One pair (marked sentence, candidate) per reading, one score each, softmax over them; training target
+= the index of the gold candidate. (BanglaBERT's WordPiece tokenizer drops the ZWNJ, so `কর্‌` shows as `কর্`.)
+
+```text
+[CLS] হাত - মুখ ধুয়ে তুমি খাওয়া শুরু @ কর @ । [SEP] কর্ [SEP]
+[CLS] হাত - মুখ ধুয়ে তুমি খাওয়া শুরু @ কর @ । [SEP] করো [SEP]
+[CLS] হাত - মুখ ধুয়ে তুমি খাওয়া শুরু @ কর @ । [SEP] কোরো [SEP]
+```
+
+**`seq2seq` (BanglaT5).** Input and training target are text (the target is `sentence_phonetic` after the same
+normalizer); at test time the generated word at the target's position is compared with the gold reading:
+
+```text
+input : phonetic: হাত-মুখ ধুয়ে তুমি খাওয়া শুরু @ কর @।
+target: হাত-মুখ ধুয়ে তুমি খাওয়া শুরু করো।
+```
+
+**Test outputs.** Every run writes `predictions.csv` (one row per test sentence) and `metrics.json`. Encoder
+(`runs/banglabert/main/seed42/predictions.csv`):
+
+```csv
+spelling,sentence,n_readings,gold,prediction,confidence,correct
+আঁক,খাতায় দশটা আঁক শেষ না হলে খেলতে যাওয়া বন্ধ।,2,আঁক্‌,আঁক্‌,0.999884,True
+আঁক,দাদু এখনও মুখে মুখে যেকোনো আঁক মিলিয়ে দেন।,2,আঁক্‌,আঁক্‌,0.999879,True
+```
+
+Seq2seq runs add the generated sentence (`raw_output`; the ZWNJ is removed inside the T5 pipeline, the prediction is
+mapped back to the canonical reading):
+
+```csv
+spelling,sentence,n_readings,gold,prediction,confidence,correct,raw_output
+আঁক,খাতায় দশটা আঁক শেষ না হলে খেলতে যাওয়া বন্ধ।,2,আঁক্‌,আঁক্‌,0.999992,True,খাতায় দশটা আঁক্ শেষ না হলে খেলতে যাওয়া বন্ধ।
+```
+
+Candidate scoring on the unseen split (`runs/banglabert_large/cand_unseen/seed42/predictions.csv`; কর never
+occurs in its training data):
+
+```csv
+spelling,sentence,n_readings,gold,prediction,confidence,correct
+কর,এ বছর থেকে মোবাইল ফোনের ওপর কর বাড়ছে।,3,কর্‌,কর্‌,0.862083,True
+```
+
+`metrics.json` (shortened):
+
+```json
+{
+ "train": {"train_time_s": 248.8, "epochs_trained": 10.0, "best_epoch": 7, "steps": 1610,
+           "peak_gpu_memory_train_mb": 2114, "params": 110029059, "checkpoint_size_mb": 421.3},
+ "dev":   {"n": 1104, "accuracy": 0.9918, "macro_f1": 0.9916, "accuracy_by_readings": {"2": 0.9926, "3": 0.9444},
+           "accuracy_by_word": {"আঁক": 1.0, "আসর": 1.0, "আসল": 0.8333, "...": "..."}},
+ "test":  {"n": 1104, "accuracy": "...", "macro_f1": "...", "accuracy_by_readings": {}, "accuracy_by_word": {}}
+}
+```
+
+Unseen-split runs name their test block `unseen_test` instead of `test`.
 
 ## 5. Experiments: what each one means
 
@@ -169,10 +271,24 @@ batch size 1.
 ## 8. Use a trained model
 
 ```bash
-python -m src.predict --checkpoint checkpoints/banglabert --text "তুমি একটু অপেক্ষা কর, আমি আসছি। বিকেলে পার্কে খেল।"
+python -m src.predict --checkpoint checkpoints/banglabert --text "তুমি একটু অপেক্ষা কর, আমি আসছি। বিকেলে তুমি পার্কে খেল।"
 ```
 
-prints the phonetic text, one line per heteronym (word, position, prediction, confidence) and the time in ms.
+prints the phonetic text, one line per heteronym (word, character position, prediction, confidence) and the time:
+
+```text
+তুমি একটু অপেক্ষা করো, আমি আসছি। বিকেলে তুমি পার্কে খ্যালো।
+
+word	position	prediction	confidence
+কর	18	করো	0.9464
+খেল	51	খ্যালো	0.9790
+
+2 heteronyms, 34.4 ms on cpu (checkpoints/banglabert)
+```
+
+Add `--device cpu` or `--device cuda` to choose the device, or `--file text.txt` instead of `--text`. Any kept
+checkpoint works the same way; `checkpoints/banglat5` gives the same text here (confidences 0.9997 and 1.0000) in
+284 ms on the CPU.
 
 ```python
 from src.predict import Predictor
@@ -180,8 +296,30 @@ from src.predict import Predictor
 predictor = Predictor.load("checkpoints/banglabert")      # any kept checkpoint folder: encoder, candidate or seq2seq
 text = "তুমি একটু অপেক্ষা কর, আমি আসছি। কর কাজটা, তারপর আবার কর!\nবিকেলে তুমি পার্কে খেল।"
 print(predictor.phoneticize(text))                        # every heteronym replaced, text otherwise unchanged
-print(predictor.predict("তুমি গ্রাফ পেপারে সরলরেখাটা আঁক।", "আঁক"))
+# তুমি একটু অপেক্ষা করো, আমি আসছি। কোরো কাজটা, তারপর আবার করো!
+# বিকেলে তুমি পার্কে খ্যালো।
+# (the second কর is read as the "later" imperative কোরো; করো would be more natural here, one of the
+#  hard same-slot cases described in the paper)
+print(predictor.predict("তুমি গ্রাফ পেপারে সরলরেখাটা আঁক।", "আঁক"))   # আঁকো
+print(predictor.predict("সময়মতো কর না দিলে জরিমানা গুনতে হবে।", "কর"))  # কর্‌
+
+phonetic, details = predictor.phoneticize_detailed("বিকেলে মাঠে বল নিয়ে খেলব, কাল আবার দেখা হবে।")
+# phonetic: বিকেলে মাঠে বল্‌ নিয়ে খেলব, কাল্‌ আবার দেখা হবে।
+# details:  [{'word': 'বল', 'position': 12, 'prediction': 'বল্‌', 'confidence': 0.9997},
+#            {'word': 'কাল', 'position': 27, 'prediction': 'কাল্‌', 'confidence': 0.9995}]
 ```
+
+A longer input, the 8-heteronym paragraph used for the latency test (`data/latency_paragraph.txt`), with
+`checkpoints/banglabert_small` (all 8 correct):
+
+```text
+in : বিকেলে তুমি পার্কে খেল, সন্ধ্যায় পড়তে বসবে। রাস্তা থেকে আনা বিড়ালছানাটা প্রথমে খুব আঁচড়াত, এখন একদম পোষ মেনে আমার কোলেই ঘুমায়। তুমি আমার জন্য একটু অপেক্ষা কর, আমি আসছি। চারদিকে রটে গেছে, বাঘ এসেছে।
+     খালি পেটে ওষুধ খেলে গ্যাস হয়। চেয়ারে বসে ঘুমিয়ে পড়লেন দাদু। তুমি গ্রাফ পেপারে সরলরেখাটা আঁক। প্রেমিকের গিটার শুনে মেয়েটা পটল।
+out: বিকেলে তুমি পার্কে খ্যালো, সন্ধ্যায় পড়তে বসবে। রাস্তা থেকে আনা বিড়ালছানাটা প্রথমে খুব আঁচড়াত, এখন একদম পোশ্‌ মেনে আমার কোলেই ঘুমায়। তুমি আমার জন্য একটু অপেক্ষা করো, আমি আসছি। চারদিকে রোটে গেছে, বাঘ এসেছে।
+     খালি পেটে ওষুধ খেলে গ্যাস হয়। চেয়ারে বোশে ঘুমিয়ে পড়লেন দাদু। তুমি গ্রাফ পেপারে সরলরেখাটা আঁকো। প্রেমিকের গিটার শুনে মেয়েটা পট্‌লো।
+```
+
+Words that are not in the heteronym list (here আঁচড়াত, খেলব) are never changed.
 
 `phoneticize` splits the text on `।`, `?`, `!` and newlines, finds every whole-word occurrence of a known
 heteronym, marks one occurrence at a time, predicts all of them in one batch and rebuilds the exact text.
