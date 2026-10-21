@@ -98,3 +98,15 @@ def test_predict_marked_uses_the_marked_occurrence_and_its_sentence():
         predictor.predict_marked("কোনো চিহ্ন নেই")
     with pytest.raises(ValueError):
         predictor.predict_marked("এটা [তালিকায়] নেই")
+
+
+def test_batch_methods_make_one_predict_items_call():
+    predictor = FakePredictor()
+    texts = ["তুমি একটু অপেক্ষা কর, আমি আসছি।", "কোনো শব্দ নেই।", "বল নিয়ে এসো। আবার কর।"]
+    out = predictor.phoneticize_batch(texts)
+    assert len(predictor.calls) == 1 and len(predictor.calls[0]) == 3
+    assert out == [predictor.phoneticize(t) for t in texts]
+    predictor.calls.clear()
+    assert predictor.predict_batch([("কর দাও", "কর"), ("বল নিয়ে এসো", "বল")]) == [first("কর"), first("বল")]
+    assert predictor.predict_marked_batch(["আবার [কর]।", "[বল] আনো।"]) == [first("কর"), first("বল")]
+    assert [len(c) for c in predictor.calls] == [2, 2]

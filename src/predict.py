@@ -44,6 +44,16 @@ def roundtrip(tokenizer: PreTrainedTokenizerBase, text: str) -> str:
     return tokenizer.decode(tokenizer(text)["input_ids"], skip_special_tokens=True)
 
 
+def sentence_item(text: str, start: int, end: int) -> Item:
+    """The item for the occurrence text[start:end], cut to the sentence that contains it."""
+    offset = 0
+    for piece in SENTENCE_END.split(text):
+        if offset <= start < offset + len(piece):
+            return crop(piece, start - offset, end - offset)
+        offset += len(piece)
+    raise ValueError(f"position {start} is outside the text")
+
+
 def crop(sentence: str, start: int, end: int) -> Item:
     left, right = sentence[:start].split(" "), sentence[end:].split(" ")
     if len(left) <= CONTEXT_WORDS and len(right) <= CONTEXT_WORDS:
@@ -134,46 +144,74 @@ class Predictor:
             predictions += self.decode(chunk, self.forward(self.encode(chunk)))
         return predictions
 
-    def predict(self, sentence: str, word: str) -> str:
-        occurrences = find_occurrences(sentence, word_pattern([word]))
-        if not occurrences:
-            raise ValueError(f"{word!r} does not occur as a whole word in {sentence!r}")
-        start, end, _ = occurrences[0]
-        return self.predict_items([(sentence, start, end, word)])[0].pronunciation
+    # Single calls go through the batch methods; a batch method sends all occurrences of all its inputs through
+    # predict_items, one model call per batch_size occurrences.
 
-    def predict_marked(self, text: str, marks: tuple[str, str] = ("[", "]")) -> str:
-        """Reading of the one heteronym written between the marks, e.g. "আগে [কর] কাজটা, তারপর আবার কর।".
-        Only the sentence that contains the mark is given to the model, as in phoneticize."""
-        start = text.find(marks[0])
-        end = text.find(marks[1], start + len(marks[0]))
-        if start < 0 or end < 0:
-            raise ValueError(f"mark the heteronym as {marks[0]}word{marks[1]}: {text!r}")
-        word = text[start + len(marks[0]):end]
+    def check_word(self, word: str) -> None:
         if word not in self.candidates:
             raise ValueError(f"{word!r} is not one of the {len(self.candidates)} known heteronyms")
-        plain = text[:start] + word + text[end + len(marks[1]):]
-        offset = 0
-        for piece in SENTENCE_END.split(plain):
-            if offset <= start < offset + len(piece):
-                return self.predict_items([crop(piece, start - offset, start - offset + len(word))])[0].pronunciation
-            offset += len(piece)
+
+    def predict_batch(self, pairs: list[tuple[str, str]]) -> list[str]:
+        """Reading of the first whole-word occurrence of each word in its sentence."""
+        items = []
+        for sentence, word in pairs:
+            self.check_word(word)
+            occurrences = find_occurrences(sentence, word_pattern([word]))
+            if not occurrences:
+                raise ValueError(f"{word!r} does not occur as a whole word in {sentence!r}")
+            start, end, _ = occurrences[0]
+            items.append(sentence_item(sentence, start, end))
+        return [p.pronunciation for p in self.predict_items(items)]
+
+    def predict(self, sentence: str, word: str) -> str:
+        return self.predict_batch([(sentence, word)])[0]
+
+    def predict_marked_batch(self, texts: list[str], marks: tuple[str, str] = ("[", "]")) -> list[str]:
+        """Reading of the one heteronym written between the marks in each text, e.g. "আগে কর কাজটা, তারপর আবার [কর]।".
+        Only the sentence that contains the mark is given to the model, as in phoneticize."""
+        items = []
+        for text in texts:
+            start = text.find(marks[0])
+            end = text.find(marks[1], start + len(marks[0])) if start >= 0 else -1
+            if start < 0 or end < 0:
+                raise ValueError(f"mark the heteronym as {marks[0]}word{marks[1]}: {text!r}")
+            word = text[start + len(marks[0]):end]
+            self.check_word(word)
+            plain = text[:start] + word + text[end + len(marks[1]):]
+            items.append(sentence_item(plain, start, start + len(word)))
+        return [p.pronunciation for p in self.predict_items(items)]
+
+    def predict_marked(self, text: str, marks: tuple[str, str] = ("[", "]")) -> str:
+        return self.predict_marked_batch([text], marks)[0]
+
+    def phoneticize_detailed_batch(self, texts: list[str]) -> list[tuple[str, list[dict]]]:
+        items, owners = [], []  # every occurrence in every text, predicted together
+        for t, text in enumerate(texts):
+            offset = 0
+            for piece in SENTENCE_END.split(text):
+                for start, end, _ in find_occurrences(piece, self.pattern):
+                    items.append(crop(piece, start, end))
+                    owners.append((t, offset + start, offset + end))
+                offset += len(piece)
+        spans: list[list] = [[] for _ in texts]
+        for item, (t, start, end), p in zip(items, owners, self.predict_items(items)):
+            detail = {"word": item[3], "position": start, "prediction": p.pronunciation or item[3], "confidence": round(p.confidence, 4)}
+            spans[t].append((start, end, detail))
+        out = []
+        for text, found in zip(texts, spans):
+            for start, end, d in reversed(found):
+                text = text[:start] + d["prediction"] + text[end:]
+            out.append((text, [d for *_, d in found]))
+        return out
 
     def phoneticize_detailed(self, text: str) -> tuple[str, list[dict]]:
-        items, spans, offset = [], [], 0
-        for piece in SENTENCE_END.split(text):
-            for start, end, _ in find_occurrences(piece, self.pattern):
-                items.append(crop(piece, start, end))
-                spans.append((offset + start, offset + end))
-            offset += len(piece)
-        predictions = self.predict_items(items)
-        details = [{"word": item[3], "position": start, "prediction": p.pronunciation or item[3], "confidence": round(p.confidence, 4)}
-                   for item, (start, _), p in zip(items, spans, predictions)]
-        for (start, end), d in sorted(zip(spans, details), key=lambda x: x[0][0], reverse=True):
-            text = text[:start] + d["prediction"] + text[end:]
-        return text, details
+        return self.phoneticize_detailed_batch([text])[0]
+
+    def phoneticize_batch(self, texts: list[str]) -> list[str]:
+        return [text for text, _ in self.phoneticize_detailed_batch(texts)]
 
     def phoneticize(self, text: str) -> str:
-        return self.phoneticize_detailed(text)[0]
+        return self.phoneticize_batch([text])[0]
 
 
 def main() -> None:

@@ -321,7 +321,25 @@ out: বিকেলে তুমি পার্কে খ্যালো, স�
 
 Words that are not in the heteronym list (here আঁচড়াত, খেলব) are never changed.
 
-### Using it from another project
+### Copyable package: `bangla_heteronym_maker/`
+
+For use in another project, copy the folder `bangla_heteronym_maker/` (self-contained, only relative imports, no
+dependency on `src/`) and a checkpoint folder. It has an interface (`HeteronymReader`), its implementation
+(`HeteronymModelReader`), a singleton `initialize(path)` / `get_reader()`, single and batch methods, a demo
+(`python -m bangla_heteronym_maker.demo /abs/path/checkpoints/banglabert`) and its own
+[README](bangla_heteronym_maker/README.md). `tests/test_package.py` checks that it gives exactly the same output as
+`src.predict.Predictor` for an encoder, a candidate and a seq2seq checkpoint.
+
+```python
+import bangla_heteronym_maker as bhm
+reader = bhm.initialize("/abs/path/checkpoints/banglabert")             # once; bhm.get_reader() elsewhere
+reader.phoneticize(text)                     # reader.phoneticize_batch([text, ...])
+reader.predict(sentence, "কর")               # reader.predict_batch([(sentence, "কর"), ...])
+reader.predict_marked("... আবার [কর]।")       # reader.predict_marked_batch([...])
+reader.readings(text)                        # reader.readings_batch([...]): word, position, reading, confidence
+```
+
+### Using it from another project (without the package)
 
 There is no package to install: put this repo on the Python path and load a kept checkpoint once (loading takes a few
 seconds; keep the `Predictor` and reuse it).
@@ -363,6 +381,10 @@ Input rules:
 - Outputs keep the ZWNJ of readings such as `কর্‌` (hasanta + U+200C); keep it if the text goes to a TTS front end.
 - `p.phoneticize_detailed(text)` also returns, per heteronym, its character position, reading and confidence, and
   `p.predict_items([(sentence, start, end, word)])` takes character offsets if you locate the words yourself.
+- Every call has a batch version that takes and returns lists: `p.phoneticize_batch(texts)`,
+  `p.phoneticize_detailed_batch(texts)`, `p.predict_batch([(sentence, word), ...])`, `p.predict_marked_batch(texts)`.
+  All occurrences go through the model together (64 per forward pass), which is about 10 times faster on the GPU than
+  a loop of single calls.
 
 Which checkpoint: `checkpoints/banglabert` is the most accurate classifier (99.46%, ~12.5 ms on the T4, ~33 ms on 4 CPU
 threads); `checkpoints/banglabert_small` is the fastest on a CPU (98.16%, 13 ms); `checkpoints/banglabert_large_cand`
@@ -514,7 +536,8 @@ requirements/   pinned packages per model
 src/            data, splits, models, train, evaluate, predict, benchmark_latency, env
 scripts/        run_model.sh, run_setting.sh, smoke.sh, env.sh, select_lr, keep_best, aggregate,
                 write_requirements, check_tokenizers
-tests/          phoneticize and data tests
+bangla_heteronym_maker/   copyable inference package (interface, implementation, singleton, demo, README)
+tests/          phoneticize, package and data tests
 data/splits/    the fixed splits;  data/latency_*: latency inputs
 runs/           per-run config/metrics/predictions/train logs, latency*.json, phoneticize demos
 checkpoints/    kept best models (not committed)
