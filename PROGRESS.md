@@ -26,3 +26,4 @@ Spec: PROMPTS.md. GPU: T4 = `CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=1
    2026-10-19 16:18: paused for office hours (services back up); hetero-resume restarts queue2 at 17:15.
 10. [ ] Paper (user request 2026-10-20): bangla-heteronym-benchmark-paper/ with ACL preprint template (XeLaTeX, bundled Bengali font),
     tables generated from results/ by scripts/paper_tables.py, stages 5-8 as \PH placeholders; refill after. ByT5 removed from the paper.
+    2026-10-21 17:25: all \PH marks filled with the final results (further.tex, conclusion, limitations); compiles. Not committed (gitignored, owner decides).
