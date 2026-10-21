@@ -141,6 +141,23 @@ class Predictor:
         start, end, _ = occurrences[0]
         return self.predict_items([(sentence, start, end, word)])[0].pronunciation
 
+    def predict_marked(self, text: str, marks: tuple[str, str] = ("[", "]")) -> str:
+        """Reading of the one heteronym written between the marks, e.g. "আগে [কর] কাজটা, তারপর আবার কর।".
+        Only the sentence that contains the mark is given to the model, as in phoneticize."""
+        start = text.find(marks[0])
+        end = text.find(marks[1], start + len(marks[0]))
+        if start < 0 or end < 0:
+            raise ValueError(f"mark the heteronym as {marks[0]}word{marks[1]}: {text!r}")
+        word = text[start + len(marks[0]):end]
+        if word not in self.candidates:
+            raise ValueError(f"{word!r} is not one of the {len(self.candidates)} known heteronyms")
+        plain = text[:start] + word + text[end + len(marks[1]):]
+        offset = 0
+        for piece in SENTENCE_END.split(plain):
+            if offset <= start < offset + len(piece):
+                return self.predict_items([crop(piece, start - offset, start - offset + len(word))])[0].pronunciation
+            offset += len(piece)
+
     def phoneticize_detailed(self, text: str) -> tuple[str, list[dict]]:
         items, spans, offset = [], [], 0
         for piece in SENTENCE_END.split(text):

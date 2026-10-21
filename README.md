@@ -321,6 +321,53 @@ out: বিকেলে তুমি পার্কে খ্যালো, স�
 
 Words that are not in the heteronym list (here আঁচড়াত, খেলব) are never changed.
 
+### Using it from another project
+
+There is no package to install: put this repo on the Python path and load a kept checkpoint once (loading takes a few
+seconds; keep the `Predictor` and reuse it).
+
+```python
+import sys
+sys.path.insert(0, "/path/to/bangla-heteronym-benchmark")
+from src.predict import Predictor
+
+p = Predictor.load("/path/to/bangla-heteronym-benchmark/checkpoints/banglabert")   # device="cpu" or "cuda" (default: cuda if available)
+```
+
+Three ways to call it:
+
+| You have | Call | You get |
+|---|---|---|
+| any text, nothing marked | `p.phoneticize(text)` | the same text with **every** known heteronym replaced by its reading |
+| a sentence and the word, the word occurs once | `p.predict(sentence, "কর")` | only the reading of that word (its first occurrence) |
+| a sentence with the target marked | `p.predict_marked("... [কর] ...")` | only the reading of the marked occurrence |
+
+```python
+p.phoneticize("আগে কর কাজটা, তারপর আবার কর। বিকেলে মাঠে বল নিয়ে যাব।")
+# 'আগে কোরো কাজটা, তারপর আবার করো। বিকেলে মাঠে বল্‌ নিয়ে যাব।'
+
+p.predict("সময়মতো কর না দিলে জরিমানা গুনতে হবে।", "কর")             # 'কর্‌'
+p.predict_marked("সরকার কর বাড়িয়েছে, তাই হিসাবটা আবার [কর]।")       # 'করো'  (the second কর; predict() would read the first)
+p.predict_marked("তুমি <<বল>> নিয়ে এসো।", marks=("<<", ">>"))        # other marks if [ ] can occur in your text
+```
+
+Input rules:
+
+- Pass normal Bangla text (Unicode, as typed). No marking is needed for `phoneticize` and `predict`.
+- Mark only when a word occurs more than once and you want a specific occurrence: put the mark directly around the
+  word, without spaces (`[কর]`, not `[ কর ]`), and mark one word per call.
+- The marked word must be one of the 183 heteronyms (`data/raw/bangla_heteronym_words.csv`); otherwise a
+  `ValueError` is raised. `phoneticize` simply leaves other words unchanged.
+- You can pass a whole paragraph: sentences are split at `।`, `?`, `!` and newlines, and each heteronym is read from
+  its own sentence (the model was trained on single sentences).
+- Outputs keep the ZWNJ of readings such as `কর্‌` (hasanta + U+200C); keep it if the text goes to a TTS front end.
+- `p.phoneticize_detailed(text)` also returns, per heteronym, its character position, reading and confidence, and
+  `p.predict_items([(sentence, start, end, word)])` takes character offsets if you locate the words yourself.
+
+Which checkpoint: `checkpoints/banglabert` is the most accurate classifier (99.46%, ~12.5 ms on the T4, ~33 ms on 4 CPU
+threads); `checkpoints/banglabert_small` is the fastest on a CPU (98.16%, 13 ms); `checkpoints/banglabert_large_cand`
+(candidate scoring) is the most accurate (99.73%) but about twice as slow. All are used the same way.
+
 `phoneticize` splits the text on `।`, `?`, `!` and newlines, finds every whole-word occurrence of a known
 heteronym, marks one occurrence at a time, predicts all of them in one batch and rebuilds the exact text.
 

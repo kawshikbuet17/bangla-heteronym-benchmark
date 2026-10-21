@@ -86,3 +86,15 @@ def test_real_checkpoint_keeps_structure_and_zwnj():
     assert out.endswith("।\nআজ ছুটি।")
     assert all(d["prediction"] in predictor.candidates["আঁক"] for d in details)
     assert ZWNJ in out or all(ZWNJ not in d["prediction"] for d in details)
+
+
+def test_predict_marked_uses_the_marked_occurrence_and_its_sentence():
+    predictor = FakePredictor()
+    assert predictor.predict_marked("প্রথম বাক্য। আগে কর কাজটা, তারপর আবার [কর]।") == first("কর")
+    sentence, start, end, word = predictor.calls[-1][0]
+    assert sentence == " আগে কর কাজটা, তারপর আবার কর।" and word == "কর" and start == sentence.rindex("কর")
+    assert predictor.predict_marked("তুমি <<বল>> নিয়ে এসো।", marks=("<<", ">>")) == first("বল")
+    with pytest.raises(ValueError):
+        predictor.predict_marked("কোনো চিহ্ন নেই")
+    with pytest.raises(ValueError):
+        predictor.predict_marked("এটা [তালিকায়] নেই")
