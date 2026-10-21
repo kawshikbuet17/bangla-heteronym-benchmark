@@ -91,3 +91,11 @@ Accuracy and macro-F1 in %, mean ± std over seeds. Latency: batch 1, full path,
 | banglabert_large | encoder | 335.6M | fp16 | 16x2 | 2e-05 | 3 | 99.18 ± 0.16 | 99.14 ± 0.16 | 99.3 / 92.6 |  | 11.7 | 8.3 | 22.8 | 107.8 | 301.8 |
 | xlm_roberta_large | encoder | 559.9M | fp16 | 8x4 | 2e-05 | 3 | 98.43 ± 0.19 | 98.34 ± 0.14 | 98.5 / 94.4 |  | 23.5 | 9.7 | 17.8 | 126.4 | 380.8 |
 | mt5_base | seq2seq | 582.4M | fp32 | 8x2 | 0.0003 | 3 | 96.11 ± 0.16 | 95.99 ± 0.24 | 96.3 / 87.0 | 0.0 | 124.6 | 15.0 | 436.2 | 1758.6 | 2815.2 |
+
+## unseen / unseen_test
+
+| model | type | params | precision | batch | lr | seeds | accuracy | macro-F1 | acc 2 / 3 readings | other-word change | train time (min) | epochs | GPU p50 | CPU4 p50 | CPU1 p50 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| banglat5 | seq2seq | 247.6M | fp32 | 16x1 | 0.0005 | 3 | 55.09 ± 1.85 | 53.47 ± 1.51 | 54.6 / 66.7 | 0.8 | 22.1 | 9.7 | 236.8 | 323.3 | 745.9 |
+| mt5_small | seq2seq | 300.2M | fp32 | 16x1 | 0.0003 | 3 | 51.69 ± 0.63 | 50.09 ± 0.43 | 51.1 / 66.7 | 0.2 | 45.4 | 15.0 | 307.6 | 923.6 | 1609.4 |
+| mt5_base | seq2seq | 582.4M | fp32 | 8x2 | 0.0003 | 3 | 58.07 ± 0.88 | 56.66 ± 1.01 | 58.0 / 60.0 | 0.6 | 99.2 | 15.0 | 436.2 | 1758.6 | 2815.2 |
