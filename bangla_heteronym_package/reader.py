@@ -1,169 +1,100 @@
-"""HeteronymReader implemented with a trained checkpoint (encoder classifier, candidate scorer or seq2seq)."""
-import math
-import threading
-from pathlib import Path
+import re
+import warnings
 
 import torch
-from torch import nn
-from transformers import LogitsProcessor, LogitsProcessorList, PreTrainedTokenizerBase
 
-from .interface import HeteronymReader, Reading
-from .modeling import candidate_features, collate, encoder_features, load_checkpoint, seq2seq_inputs
-from .text import (
-    SENTENCE_END, Item, crop, find_occurrences, get_normalizer, piece_index, sentence_item, split_pieces, strip_punct,
-    token_index, word_pattern,
-)
+from .interface import HeteronymReader
+from .modeling import encoder_batch, load_checkpoint
+from .text import BOUNDARY, get_normalizer, mark, sentence_item, strip_punct, target_piece, word_pattern
 
-
-class _GreedyLogProbs(LogitsProcessor):
-    """Records the log-probability of each greedy choice while generating (for the seq2seq confidence)."""
-
-    def __init__(self):
-        self.steps: list[torch.Tensor] = []
-
-    def __call__(self, input_ids: torch.Tensor, scores: torch.Tensor) -> torch.Tensor:
-        scores32 = scores.float()
-        self.steps.append(scores32.max(-1).values - scores32.logsumexp(-1))
-        return scores
+BATCH_SIZE = 64  # occurrences per model call
+# Model types that run on padded batches: all 12 benchmark models and the candidate / target-only checkpoints.
+BATCH_MODEL_TYPES = ("encoder", "candidate", "seq2seq")
 
 
 class HeteronymModelReader(HeteronymReader):
-    def __init__(self, model: nn.Module, tokenizer: PreTrainedTokenizerBase, hconfig: dict, device: str, half: bool,
-                 batch_size: int = 64):
-        self.model = (model.half() if half else model).to(device).eval()
-        self.tokenizer = tokenizer
-        self.hconfig = hconfig
-        self.device = torch.device(device)
-        self.batch_size = batch_size
-        self._lock = threading.Lock()  # one model call at a time when threads share the reader
-        self.candidates: dict[str, list[str]] = hconfig["candidates"]
-        self.marker = tuple(hconfig["marker"]) if hconfig["marker"] else None
-        self.norm = get_normalizer(hconfig["normalize"], hconfig.get("strip_zwnj", False))
-        self.pattern = word_pattern(list(self.candidates))
-        self.kind = hconfig["model_type"]
-        if self.kind == "seq2seq":
-            # A generated word is compared with each candidate after the same normalizer + tokenizer round trip,
-            # then mapped back to the candidate, so outputs always keep their ZWNJ.
-            self.canon = {w: [self._canonical(c) for c in cands] for w, cands in self.candidates.items()}
+    """HeteronymReader backed by a trained checkpoint (encoder classifier, candidate scorer or seq2seq model)."""
 
-    @classmethod
-    def load(cls, checkpoint: str | Path, device: str | None = None, precision: str | None = None,
-             batch_size: int = 64) -> "HeteronymModelReader":
-        """checkpoint: a checkpoint folder (absolute or relative path). device: "cuda", "cuda:1", "cpu" (default: cuda
-        if available). precision: "fp16" or "fp32" (default: the training precision on a GPU, fp32 on a CPU)."""
-        model, tokenizer, hconfig = load_checkpoint(checkpoint)
-        device = device or ("cuda" if torch.cuda.is_available() else "cpu")
-        precision = precision or (hconfig["precision"] if not device.startswith("cpu") else "fp32")
-        return cls(model, tokenizer, hconfig, device, precision == "fp16", batch_size)
-
-    @property
-    def heteronyms(self) -> dict[str, list[str]]:
-        return self.candidates
-
-    # ---- public API (see interface.py)
-
-    def readings_batch(self, texts: list[str]) -> list[list[Reading]]:
-        items, owners = [], []  # every occurrence in every text, predicted together
-        for t, text in enumerate(texts):
-            offset = 0
-            for piece in SENTENCE_END.split(text):
-                for start, end, word in find_occurrences(piece, self.pattern):
-                    items.append(crop(piece, start, end))
-                    owners.append((t, offset + start, offset + end, word))
-                offset += len(piece)
-        results: list[list[Reading]] = [[] for _ in texts]
-        for (t, start, end, word), (reading, confidence) in zip(owners, self._predict_items(items)):
-            results[t].append(Reading(word, start, end, reading or word, round(confidence, 4)))
-        return results
+    def __init__(self, checkpoint_path, device: str | None = None):
+        model, self.tokenizer, self.config = load_checkpoint(checkpoint_path)
+        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        half = self.config["precision"] == "fp16" and not self.device.startswith("cpu")
+        self.model = (model.half() if half else model).to(self.device).eval()
+        self.heteronyms: dict[str, list[str]] = self.config["candidates"]  # word -> its readings
+        self.pattern = word_pattern(self.heteronyms)
+        self.norm = get_normalizer(self.config["normalize"], self.config.get("strip_zwnj", False))
+        self.supports_batch = self.config["model_type"] in BATCH_MODEL_TYPES and self.config.get("batch", True)
+        self.batch_size = BATCH_SIZE if self.supports_batch else 1
+        if not self.supports_batch:
+            warnings.warn(f"{checkpoint_path} does not support batch inference; the *_batch methods will process their "
+                          "inputs one at a time", stacklevel=2)
 
     def phoneticize_batch(self, texts: list[str]) -> list[str]:
-        out = []
-        for text, readings in zip(texts, self.readings_batch(texts)):
-            for r in reversed(readings):
-                text = text[:r.start] + r.reading + text[r.end:]
-            out.append(text)
+        found = [(t, m.start(), m.end()) for t, text in enumerate(texts) for m in self.pattern.finditer(text)]
+        readings = self._read([sentence_item(texts[t], start, end) for t, start, end in found])
+        out = list(texts)
+        for (t, start, end), reading in reversed(list(zip(found, readings))):  # from the end, so offsets stay valid
+            out[t] = out[t][:start] + reading + out[t][end:]
         return out
 
     def predict_batch(self, pairs: list[tuple[str, str]]) -> list[str]:
         items = []
         for sentence, word in pairs:
-            self._check_word(word)
-            occurrences = find_occurrences(sentence, word_pattern([word]))
-            if not occurrences:
+            self._check(word)
+            match = word_pattern([word]).search(sentence)
+            if not match:
                 raise ValueError(f"{word!r} does not occur as a whole word in {sentence!r}")
-            start, end, _ = occurrences[0]
-            items.append(sentence_item(sentence, start, end))
-        return [reading for reading, _ in self._predict_items(items)]
+            items.append(sentence_item(sentence, match.start(), match.end()))
+        return self._read(items)
 
     def predict_marked_batch(self, texts: list[str], marks: tuple[str, str] = ("[", "]")) -> list[str]:
         items = []
         for text in texts:
             start = text.find(marks[0])
-            end = text.find(marks[1], start + len(marks[0])) if start >= 0 else -1
-            if start < 0 or end < 0:
+            end = text.find(marks[1], start + 1) if start >= 0 else -1
+            if end < 0:
                 raise ValueError(f"mark the heteronym as {marks[0]}word{marks[1]}: {text!r}")
             word = text[start + len(marks[0]):end]
-            self._check_word(word)
-            plain = text[:start] + word + text[end + len(marks[1]):]
-            items.append(sentence_item(plain, start, start + len(word)))
-        return [reading for reading, _ in self._predict_items(items)]
+            self._check(word)
+            items.append(sentence_item(text[:start] + word + text[end + len(marks[1]):], start, start + len(word)))
+        return self._read(items)
 
-    # ---- implementation
+    def _check(self, word: str) -> None:
+        if word not in self.heteronyms:
+            raise ValueError(f"{word!r} is not one of the {len(self.heteronyms)} known heteronyms")
 
-    def _check_word(self, word: str) -> None:
-        if word not in self.candidates:
-            raise ValueError(f"{word!r} is not one of the {len(self.candidates)} known heteronyms")
-
-    def _canonical(self, text: str) -> str:
-        return strip_punct(self.tokenizer.decode(self.tokenizer(self.norm(text))["input_ids"], skip_special_tokens=True))
-
-    def _predict_items(self, items: list[Item]) -> list[tuple[str, float]]:
-        """(reading, confidence) per item; one model call per batch_size items."""
-        out = []
+    def _read(self, items: list[tuple[str, int, int, str]]) -> list[str]:
+        """The reading for each (sentence, start, end, word); one model call per batch_size items (1 = sequential)."""
+        readings = []
         for i in range(0, len(items), self.batch_size):
             chunk = items[i:i + self.batch_size]
-            with self._lock:
-                out += self._decode(chunk, self._forward(self._encode(chunk)))
-        return out
+            with torch.inference_mode():
+                if self.config["model_type"] == "seq2seq":
+                    readings += self._read_seq2seq(chunk)
+                else:
+                    batch = encoder_batch(self.tokenizer, chunk, self.config, self.norm, self.tokenizer.pad_token_id)
+                    best = self.model(**{k: v.to(self.device) for k, v in batch.items()}).argmax(-1).tolist()
+                    readings += [self.heteronyms[w][k] for (*_, w), k in zip(chunk, best)]
+        return readings
 
-    def _encode(self, items: list[Item]) -> dict[str, torch.Tensor]:
-        hc = self.hconfig
-        if self.kind == "seq2seq":
-            batch = self.tokenizer(seq2seq_inputs(items, self.marker, self.norm), padding=True, truncation=True,
-                                   max_length=hc["max_length"], return_tensors="pt")
-        else:
-            build = candidate_features if self.kind == "candidate" else encoder_features
-            batch = collate(build(self.tokenizer, items, self.candidates, self.marker, self.norm, hc["max_length"]),
-                            self.tokenizer.pad_token_id)
-        return {k: v.to(self.device) for k, v in batch.items()}
+    def _read_seq2seq(self, items) -> list[str]:
+        """Generates the whole sentence with the word respelled and takes the word at the target's position."""
+        inputs = ["phonetic: " + mark(s, a, b, self.config["marker"], self.norm)[0] for s, a, b, _ in items]
+        batch = self.tokenizer(inputs, padding=True, truncation=True, max_length=self.config["max_length"], return_tensors="pt")
+        output = self.model.generate(**batch.to(self.device), max_new_tokens=self.config["max_length"], num_beams=1, do_sample=False)
+        readings = []
+        for text, (sentence, start, _, word) in zip(self.tokenizer.batch_decode(output, skip_special_tokens=True), items):
+            if self.config["output"] == "target":
+                generated = strip_punct(text)
+            else:
+                token, piece = target_piece(sentence, start)
+                tokens = text.split()
+                pieces = re.split(rf"[{BOUNDARY}]", tokens[token]) if token < len(tokens) else []
+                generated = strip_punct(pieces[piece]) if piece < len(pieces) else ""
+            # compare after the same normalizer + tokenizer round trip, and return the candidate (it keeps its ZWNJ)
+            canon = [self._roundtrip(c) for c in self.heteronyms[word]]
+            readings.append(self.heteronyms[word][canon.index(generated)] if generated in canon else generated or word)
+        return readings
 
-    def _forward(self, batch: dict[str, torch.Tensor]):
-        with torch.inference_mode():
-            if self.kind == "seq2seq":
-                recorder = _GreedyLogProbs()
-                sequences = self.model.generate(**batch, max_new_tokens=self.hconfig["max_length"], num_beams=1, do_sample=False,
-                                                logits_processor=LogitsProcessorList([recorder]))
-                return sequences, torch.stack(recorder.steps, 1)
-            return self.model(**batch)
-
-    def _decode(self, items: list[Item], outputs) -> list[tuple[str, float]]:
-        if self.kind != "seq2seq":
-            confidence, index = outputs.float().softmax(-1).max(-1)
-            return [(self.candidates[w][i], c) for (*_, w), i, c in zip(items, index.tolist(), confidence.tolist())]
-        sequences, logprobs = outputs
-        mask = (sequences[:, -logprobs.size(1):] != self.tokenizer.pad_token_id).float()
-        mean_logprob = (logprobs * mask).sum(1) / mask.sum(1).clamp(min=1)
-        texts = self.tokenizer.batch_decode(sequences, skip_special_tokens=True)
-        return [(self._from_output(text, item), math.exp(lp)) for text, item, lp in zip(texts, items, mean_logprob.tolist())]
-
-    def _from_output(self, text: str, item: Item) -> str:
-        """The generated word at the target's position, mapped back to its candidate when it matches one."""
-        sentence, start, _, word = item
-        if self.hconfig["output"] == "target":
-            raw = strip_punct(text)
-        else:
-            tokens, idx, piece = text.split(), token_index(sentence, start), piece_index(sentence, start)
-            pieces = split_pieces(tokens[idx]) if idx < len(tokens) else []
-            raw = strip_punct(pieces[piece]) if piece < len(pieces) else ""
-        canon = self.canon[word]
-        return self.candidates[word][canon.index(raw)] if raw in canon else raw
+    def _roundtrip(self, text: str) -> str:
+        return strip_punct(self.tokenizer.decode(self.tokenizer(self.norm(text))["input_ids"], skip_special_tokens=True))
