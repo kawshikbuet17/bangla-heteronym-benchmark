@@ -1,0 +1,10 @@
+{
+  "seed": 43,
+  "dev_accuracy_by_seed": {
+    "seed42": 0.9719202898550725,
+    "seed43": 0.9728260869565217,
+    "seed44": 0.5778985507246377
+  },
+  "checkpoint": "checkpoints/xlm_roberta_large_cand",
+  "size_mb": 2157.0
+}
