@@ -36,6 +36,23 @@ Disk used by `checkpoints/`: 18G.
 
 ## Entries (newest first)
 
+### 2026-10-22: ব্যাংককে readings swapped in the dataset, fixed locally
+
+Owner spotted it in the paper's example table. In dataset revision 2c3d86b all 20 Bangkok sentences of ব্যাংককে are
+labelled ব্যাংক্‌কে and all 20 bank sentences ব্যাংকোকে; correct is Bangkok = ব্যাংকোকে (ব্যাংকক + এ), the bank =
+ব্যাংক্‌কে (ব্যাংক + কে). Owner's choice: patch the local data and checkpoints, no retraining.
+
+- `src.data.READING_SWAPS` + `fix_readings`, applied in `load_dataset()` (the downloaded file stays the original).
+  Committed splits and `data/latency_sentences.csv` fixed (118 rows); `src.splits check` passes.
+- All 16 kept checkpoints get `reading_fixes` in `heteronym_config.json` (`scripts/patch_checkpoints.py`); `src.predict`
+  and the package map the output. Checked: BanglaBERT, the BanglaBERT candidate scorer and BanglaT5 now read Bangkok
+  ব্যাংকোকে and the bank ব্যাংক্‌কে; BanglaBERT test accuracy on the fixed test set is unchanged (99.5471%).
+- Main split, learning curves, ablations: unchanged (the swap was consistent between training and test).
+- Unseen split (ব্যাংককে is a held-out test word): rescored from the saved predictions (`scripts/rescore_label_fix.py`).
+  Candidate scoring: BanglaBERT-large 83.24 -> 83.11 ± 2.38, BanglaBERT 81.02 -> 82.31 ± 0.92, XLM-R-large 62.09 ->
+  61.96 ± 21.28. Seq2seq unchanged (they produced neither reading for this word). Paper and README updated.
+- The Hugging Face dataset itself still has the swap (owner to fix there).
+
 ### 2026-10-21 17:40: all experiments finished (queue5 done, no failures)
 
 Learning curves for all 12 models (seed 42) finished at 16:50, then latency for the 3 candidate scorers and the

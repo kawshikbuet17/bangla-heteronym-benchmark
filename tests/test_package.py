@@ -118,6 +118,10 @@ def test_same_output_as_benchmark_predictor(name):
     assert reader.predict_marked_batch(marked) == predictor.predict_marked_batch(marked) == [reader.predict_marked(m) for m in marked]
     marked_texts = ["সরকার [কর] বাড়িয়েছে, তাই হিসাবটা আবার [কর]। বিকেলে মাঠে [বল] নিয়ে যাব।", "তুমি গ্রাফ পেপারে সরলরেখাটা [আঁক]।"]
     assert reader.phoneticize_marked_batch(marked_texts) == predictor.phoneticize_marked_batch(marked_texts)
+    # patched checkpoints (scripts.patch_checkpoints) read ব্যাংককে correctly: Bangkok ব্যাংকোকে, the bank ব্যাংক্‌কে
+    bangkok = [("ঢাকা থেকে ব্যাংককে সরাসরি ফ্লাইট আছে।", "ব্যাংককে"), ("সরকার ব্যাংককে সুদের হার কমাতে বলেছে।", "ব্যাংককে")]
+    if reader.config.get("reading_fixes"):
+        assert reader.predict_batch(bangkok) == predictor.predict_batch(bangkok) == ["ব্যাংকোকে", "ব্যাংক্‌কে"]
 
 
 def test_no_batch_support_warns_and_runs_one_at_a_time(monkeypatch):

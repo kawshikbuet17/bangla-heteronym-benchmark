@@ -12,7 +12,8 @@ output: তুমি গ্রাফ পেপারে সরলরেখাট
 
 Dataset: [kawshikbuet17/bangla-heteronyms](https://huggingface.co/datasets/kawshikbuet17/bangla-heteronyms) (7,360
 sentences, 183 words, 368 pronunciations, 20 sentences each). Readings use hasanta + ZWNJ (`্‌`, U+09CD U+200C); the
-ZWNJ is never removed from the data. Also see [EXPERIMENT_LOG.md](EXPERIMENT_LOG.md) (every run, problem and decision),
+ZWNJ is never removed from the data. In the pinned revision the two readings of ব্যাংককে are swapped; this repo
+corrects them (see Notes). Also see [EXPERIMENT_LOG.md](EXPERIMENT_LOG.md) (every run, problem and decision),
 [PROGRESS.md](PROGRESS.md) and [results/](results/).
 
 ## 1. Setup
@@ -193,11 +194,11 @@ sentences of 37 words that never occur in training or dev.
 | model | approach | main test | unseen test | GPU p50 |
 |---|---|---|---|---|
 | banglabert_large | classifier | 99.18 ± 0.16 | n/a | 22.8 |
-| banglabert_large | candidate | 99.73 ± 0.09 | 83.24 ± 2.55 | 23.8 |
+| banglabert_large | candidate | 99.73 ± 0.09 | 83.11 ± 2.38 | 23.8 |
 | banglabert | classifier | 99.46 ± 0.16 | n/a | 12.5 |
-| banglabert | candidate | 99.37 ± 0.16 | 81.02 ± 1.22 | 13.6 |
+| banglabert | candidate | 99.37 ± 0.16 | 82.31 ± 0.92 | 13.6 |
 | xlm_roberta_large | classifier | 98.43 ± 0.19 | n/a | 17.8 |
-| xlm_roberta_large | candidate | 83.30 ± 23.82 | 62.09 ± 21.18 | 19.9 |
+| xlm_roberta_large | candidate | 83.30 ± 23.82 | 61.96 ± 21.28 | 19.9 |
 | banglat5 | seq2seq | 98.37 ± 0.18 | 55.09 ± 1.85 | 236.8 |
 | mt5_small | seq2seq | 93.36 ± 0.21 | 51.69 ± 0.63 | 307.6 |
 | mt5_base | seq2seq | 96.11 ± 0.16 | 58.07 ± 0.88 | 436.2 |
@@ -234,6 +235,13 @@ target's pronunciation: 98.28 ± 0.47 (full sentence 98.37 ± 0.18) at 86.1 ms G
 
 ## 8. Notes
 
+- **ব্যাংককে label fix (2026-10-22).** In dataset revision `2c3d86b` the 20 Bangkok sentences of ব্যাংককে are
+  labelled ব্যাংক্‌কে and the 20 bank sentences ব্যাংকোকে; it is the other way round. `src.data.READING_SWAPS`
+  corrects them in `load_dataset()`, the committed splits and latency inputs are corrected, and all checkpoints, which
+  were trained before the fix, map their output with `reading_fixes` in `heteronym_config.json`
+  (`scripts/patch_checkpoints.py`). Main-split results are unchanged (the swap was the same in training and test);
+  the unseen split, where ব্যাংককে is a test word, was rescored from the saved predictions
+  (`scripts/rescore_label_fix.py`).
 - **ZWNJ after hasanta.** No tokenizer here round-trips it (`results/tokenizer_zwnj.csv`). WordPiece models
   (BanglaBERT, bangla-bert-base, MuRIL) silently drop it; SentencePiece models give different ids but cannot decode
   it back, and T5 tokenizers decode it as a space, which splits a word in two. So the data keeps it, seq2seq models

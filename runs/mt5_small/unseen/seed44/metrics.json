@@ -217,6 +217,7 @@
       "সরে": 0.0
     },
     "avg_generated_tokens": 18.680666666666667,
-    "other_word_change_rate": 0.0006666666666666666
+    "other_word_change_rate": 0.0006666666666666666,
+    "label_fix": "ব্যাংককে gold readings corrected and rescored on 2026-10-22 (scripts/rescore_label_fix.py)"
   }
 }

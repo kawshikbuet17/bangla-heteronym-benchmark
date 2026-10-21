@@ -31,3 +31,13 @@ def test_data_and_split_checks():
 
     report = check()
     assert report["sizes"]["train"] == 5152 and report["sizes"]["test"] == 1104
+
+
+def test_reading_swap_is_fixed_in_the_splits():
+    """ব্যাংককে: "the bank" (object) is ব্যাংক্‌কে and "in/to Bangkok" is ব্যাংকোকে (src.data.READING_SWAPS)."""
+    from src.data import read_csv
+    df = read_csv("data/splits/train.csv")
+    word = df[df["spelling"] == "ব্যাংককে"]
+    bank = word[word["sentence"].str.contains("ঋণ|সুদ|কার্ড|গ্রাহক|কেন্দ্রীয়")]
+    assert len(bank) and set(bank["pronunciation"]) == {"ব্যাংক্‌কে"}
+    assert set(word.loc[~word.index.isin(bank.index), "pronunciation"]) >= {"ব্যাংকোকে"}

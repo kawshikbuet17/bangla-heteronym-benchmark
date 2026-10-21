@@ -30,6 +30,27 @@ Marker = tuple[str, str] | None
 Normalizer = Callable[[str], str]
 
 
+# Local corrections to dataset revision DATASET_REVISION (owner, 2026-10-22): word -> the two readings whose
+# sentences are swapped. ব্যাংককে "the bank" (object) is ব্যাংক্‌কে and "in/to Bangkok" is ব্যাংকোকে; the revision
+# has them the other way round in all 40 sentences. load_dataset() applies the fix; the committed split files and
+# latency inputs are fixed already. Checkpoints trained before the fix map their output with `reading_fixes` in
+# heteronym_config.json (scripts/patch_checkpoints.py).
+READING_SWAPS = {"ব্যাংককে": ("ব্যাংক্‌কে", "ব্যাংকোকে")}
+
+
+def fix_readings(df: pd.DataFrame) -> pd.DataFrame:
+    """Applies READING_SWAPS to rows with spelling / pronunciation / sentence / sentence_phonetic columns."""
+    df = df.copy()
+    for word, (a, b) in READING_SWAPS.items():
+        rows = df["spelling"] == word
+        swapped = df.loc[rows, "pronunciation"].map({a: b, b: a})
+        for i in df.index[rows]:
+            start, end, _ = find_occurrences(df.at[i, "sentence"], word_pattern([word]))[0]
+            df.at[i, "sentence_phonetic"] = df.at[i, "sentence"][:start] + swapped[i] + df.at[i, "sentence"][end:]
+        df.loc[rows, "pronunciation"] = swapped
+    return df
+
+
 def download() -> None:
     for name in (DATASET_FILE, WORDS_FILE):
         hf_hub_download(DATASET_REPO, name, repo_type="dataset", revision=DATASET_REVISION, local_dir=RAW_DIR)
@@ -40,7 +61,8 @@ def read_csv(path: str | Path) -> pd.DataFrame:
 
 
 def load_dataset() -> pd.DataFrame:
-    return read_csv(RAW_DIR / DATASET_FILE)
+    """The downloaded revision with READING_SWAPS applied (the file on disk stays the original revision)."""
+    return fix_readings(read_csv(RAW_DIR / DATASET_FILE))
 
 
 def load_words() -> dict[str, list[str]]:

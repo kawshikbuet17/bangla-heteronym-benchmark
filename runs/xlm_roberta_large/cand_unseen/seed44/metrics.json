@@ -213,6 +213,7 @@
       "রব": 0.975,
       "লড়ে": 1.0,
       "সরে": 0.925
-    }
+    },
+    "label_fix": "ব্যাংককে gold readings corrected and rescored on 2026-10-22 (scripts/rescore_label_fix.py)"
   }
 }

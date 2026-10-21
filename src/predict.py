@@ -155,6 +155,11 @@ class Predictor:
         for i in range(0, len(items), batch_size):
             chunk = items[i:i + batch_size]
             predictions += self.decode(chunk, self.forward(self.encode(chunk)))
+        # Checkpoints trained on the unfixed dataset revision predict the swapped reading of a few words
+        # (src.data.READING_SWAPS); `reading_fixes` in their config maps it to the correct one.
+        fixes = self.hconfig.get("reading_fixes", {})
+        for (*_, word), p in zip(items, predictions):
+            p.pronunciation = fixes.get(word, {}).get(p.pronunciation, p.pronunciation)
         return predictions
 
     # Single calls go through the batch methods; a batch method sends all occurrences of all its inputs through

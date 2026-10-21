@@ -96,7 +96,10 @@ class HeteronymModelReader(HeteronymReader):
                     readings += self._read_seq2seq(chunk)
                 else:
                     readings += self._read_encoder(chunk)
-        return readings
+        # Checkpoints trained on the unfixed dataset revision predict the swapped reading of ব্যাংককে;
+        # `reading_fixes` in their heteronym_config.json maps it to the correct one.
+        fixes = self.config.get("reading_fixes", {})
+        return [fixes.get(w, {}).get(r, r) for r, (*_, w) in zip(readings, items)]
 
     def _read_encoder(self, items) -> list[str]:
         """Encoder classifier and candidate scorer."""
