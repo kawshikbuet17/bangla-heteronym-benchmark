@@ -216,6 +216,59 @@ plots in [results/plots/](results/plots/), and [EXPERIMENT_LOG.md](EXPERIMENT_LO
 The table between the `results-table` markers (here and in EXPERIMENT_LOG.md) is rewritten by `scripts.aggregate`;
 don't edit it by hand.
 
+### Further experiments
+
+Accuracy in %, mean ± std over seeds 42/43/44; GPU p50 in ms (Tesla T4, batch 1, full path).
+
+**Candidate scoring and unseen words** (`cand_main`, `cand_unseen`, `unseen`). The unseen test set has 1,500
+sentences of 37 words that never occur in training or dev.
+
+| model | approach | main test | unseen test | GPU p50 |
+|---|---|---|---|---|
+| banglabert_large | classifier | 99.18 ± 0.16 | n/a | 22.8 |
+| banglabert_large | candidate | 99.73 ± 0.09 | 83.24 ± 2.55 | 23.8 |
+| banglabert | classifier | 99.46 ± 0.16 | n/a | 12.5 |
+| banglabert | candidate | 99.37 ± 0.16 | 81.02 ± 1.22 | 13.6 |
+| xlm_roberta_large | classifier | 98.43 ± 0.19 | n/a | 17.8 |
+| xlm_roberta_large | candidate | 83.30 ± 23.82 | 62.09 ± 21.18 | 19.9 |
+| banglat5 | seq2seq | 98.37 ± 0.18 | 55.09 ± 1.85 | 236.8 |
+| mt5_small | seq2seq | 93.36 ± 0.21 | 51.69 ± 0.63 | 307.6 |
+| mt5_base | seq2seq | 96.11 ± 0.16 | 58.07 ± 0.88 | 436.2 |
+
+- XLM-R-large candidate runs collapsed in 3 of 6 runs (main seed 44: 55.8%; unseen seeds 42 and 43: about 50%):
+  the training loss stayed at the two-candidate chance level until early stopping. They are kept in the mean
+  (owner's decision, 2026-10-20); the converged seeds reach 97.0/97.1% (main) and 86.5% (unseen).
+- On unseen words the seq2seq models write one of the word's readings in only 68-74% of the sentences (otherwise
+  an invented pronunciation); when they do, it is the right one 76-81% of the time. The candidate scorer always
+  picks one of the readings, which is why it generalizes much better.
+
+**Learning curve** (seed 42 only; 14 is the seed-42 main run), test accuracy by sentences per pronunciation:
+
+| model | 2 | 5 | 10 | 14 |
+|---|---|---|---|---|
+| banglabert_small | 91.85 | 93.57 | 96.83 | 98.28 |
+| banglabert | 91.94 | 97.19 | 98.73 | 99.28 |
+| bangla_bert_base | 88.50 | 93.93 | 97.01 | 98.28 |
+| muril_base | 88.86 | 93.39 | 94.38 | 96.92 |
+| banglat5 | 83.97 | 96.65 | 98.73 | 98.55 |
+| xlm_roberta_base | 87.59 | 93.75 | 97.92 | 97.55 |
+| indicbertv2_mlm | 91.58 | 96.47 | 97.83 | 98.46 |
+| mdeberta_v3_base | 92.39 | 95.65 | 97.83 | 97.46 |
+| mt5_small | 52.72 | 81.70 | 92.66 | 93.48 |
+| banglabert_large | 93.57 | 97.74 | 98.73 | 99.09 |
+| xlm_roberta_large | 90.94 | 95.65 | 97.64 | 98.28 |
+| mt5_base | 80.98 | 92.03 | 95.47 | 96.20 |
+
+Going from 2 to 5 sentences per pronunciation gives the largest gain for every model except BanglaBERT-small
+(which gains more from 5 to 10). At 10, every encoder except MuRIL is within 1.5 points of its result at 14, and
+three models (BanglaT5, XLM-R-base, mDeBERTa) are slightly higher at 10 than at 14, which is within single-seed
+noise. mT5-small needs the most data (52.7% at 2).
+
+**Ablations** (BanglaBERT-large and BanglaT5, 3 seeds; [results/ablations.md](results/ablations.md)): no marker
+99.67 ± 0.10 and mean pooling of the target tokens 99.52 ± 0.14 beat the default `@ word @` marker with the
+opening-marker head (99.18 ± 0.16); `<h>` tokens 99.34 ± 0.14; `[CLS]` 99.09 ± 0.31. BanglaT5 writing only the
+target's pronunciation: 98.28 ± 0.47 (full sentence 98.37 ± 0.18) at 86.1 ms GPU p50 instead of 236.8 ms.
+
 ## 10. Things to know (pitfalls found while building this)
 
 - **ZWNJ after hasanta.** No tokenizer here round-trips it (`results/tokenizer_zwnj.csv`). WordPiece models
