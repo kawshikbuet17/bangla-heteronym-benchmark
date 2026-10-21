@@ -1,4 +1,6 @@
 model,sentences_per_pronunciation,train_sentences,accuracy_mean,accuracy_std,seeds
+bangla_bert_base,2,736,0.884963768115942,,1
+bangla_bert_base,14,5152,0.9827898550724637,,1
 banglabert,2,736,0.9193840579710145,,1
 banglabert,5,1840,0.9719202898550725,,1
 banglabert,10,3680,0.9873188405797102,,1
