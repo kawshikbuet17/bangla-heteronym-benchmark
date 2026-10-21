@@ -29,8 +29,8 @@ ABLATIONS = {
     "encoder head": [("main", "opening marker token"), ("abl_head_mean", "mean of target tokens"), ("abl_head_cls", "[CLS]")],
     "seq2seq output": [("main", "full sentence"), ("abl_output_target", "target pronunciation only")],
 }
-# Reference categorical palette, first three slots (validated all-pairs for scatter plots).
-COLORS = {"encoder": "#2a78d6", "seq2seq": "#eb6834", "candidate": "#1baf7a"}
+# Reference categorical palette, first two slots (validated all-pairs for scatter plots).
+COLORS = {"encoder": "#2a78d6", "seq2seq": "#eb6834"}
 INK, INK_2, GRID, SURFACE = "#0b0b0b", "#52514e", "#e4e3df", "#fcfcfb"
 BENGALI_FONT = "/usr/share/fonts/truetype/noto/NotoSansBengali-Regular.ttf"
 
@@ -205,83 +205,148 @@ def lr_search() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def style(ax, xlabel: str, ylabel: str, title: str) -> None:
+NAMES = {"banglabert_small": "BanglaBERT-small", "banglabert": "BanglaBERT", "bangla_bert_base": "Bangla-BERT-base",
+         "muril_base": "MuRIL-base", "banglat5": "BanglaT5", "xlm_roberta_base": "XLM-R-base",
+         "indicbertv2_mlm": "IndicBERTv2-MLM", "mdeberta_v3_base": "mDeBERTa-v3-base", "mt5_small": "mT5-small",
+         "banglabert_large": "BanglaBERT-large", "xlm_roberta_large": "XLM-R-large", "mt5_base": "mT5-base"}
+BANGLA_ONLY = {"banglabert_small", "banglabert", "bangla_bert_base", "banglat5", "banglabert_large"}
+# Label offsets (points) and alignment for the crowded clusters, per plot; other labels sit to the right of the point.
+LABELS = {
+    "params": {"indicbertv2_mlm": (0, 9, "center"), "bangla_bert_base": (-6, -4, "right"), "banglat5": (-6, -6, "right"), "muril_base": (-6, -3, "right"),
+               "mt5_small": (-6, -3, "right"), "mdeberta_v3_base": (6, 3, "left"), "xlm_roberta_base": (6, -5, "left")},
+    "gpu": {"indicbertv2_mlm": (-6, 4, "right"), "bangla_bert_base": (-6, -4, "right"), "banglabert_small": (6, -3, "left"),
+            "xlm_roberta_base": (-6, -2, "right"), "muril_base": (-6, -2, "right"), "xlm_roberta_large": (5, 4, "left")},
+    "cpu": {"banglabert_small": (-6, 0, "right"), "indicbertv2_mlm": (-6, 5, "right"), "bangla_bert_base": (-6, -5, "right"),
+            "xlm_roberta_large": (0, 7, "center"), "xlm_roberta_base": (6, -3, "left"), "muril_base": (6, -3, "left")},
+}
+LC_YMIN = 80  # learning-curve points below are drawn as an arrow at the bottom edge with their value
+
+
+def style(ax, xlabel: str, ylabel: str, title: str = "") -> None:
     ax.set_facecolor(SURFACE)
-    ax.set_title(title, loc="left", color=INK, fontsize=11)
-    ax.set_xlabel(xlabel, color=INK_2)
-    ax.set_ylabel(ylabel, color=INK_2)
+    if title:
+        ax.set_title(title, loc="left", color=INK, fontsize=10)
+    ax.set_xlabel(xlabel, color=INK_2, fontsize=9)
+    ax.set_ylabel(ylabel, color=INK_2, fontsize=9)
     ax.grid(True, color=GRID, linewidth=0.6)
     ax.set_axisbelow(True)
     for side in ("top", "right"):
         ax.spines[side].set_visible(False)
     for side in ("left", "bottom"):
         ax.spines[side].set_color(GRID)
-    ax.tick_params(colors=INK_2, labelsize=8)
+    ax.tick_params(colors=INK_2, labelsize=8, length=0)
 
 
-def legend(ax, kinds: set[str]) -> None:
-    handles = [plt.Line2D([], [], marker="o", linestyle="", markersize=7, color=COLORS[k], label=k) for k in COLORS if k in kinds]
-    ax.legend(handles=handles, frameon=False, fontsize=8, labelcolor=INK_2)
+def pareto(points: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    """Points not beaten in accuracy by any faster point, sorted by latency."""
+    front, best = [], -1.0
+    for x, y in sorted(points):
+        if y > best:
+            front.append((x, y))
+            best = y
+    return front
 
 
-def scatter(points: pd.DataFrame, x: str, xlabel: str, title: str, out: Path) -> None:
+def scatter(points: pd.DataFrame, x: str, xlabel: str, title: str, panel: str, out: Path) -> None:
+    """Main-split accuracy against size or latency: colour = model type, filled = Bangla-only, hollow = multilingual."""
     points = points.dropna(subset=[x])
     if points.empty:
         return
-    fig, ax = plt.subplots(figsize=(7, 4.5), facecolor=SURFACE)
-    for kind, g in points.groupby("kind"):
-        ax.errorbar(g[x], g["accuracy_mean"] * 100, yerr=g["accuracy_std"].fillna(0) * 100, fmt="o", markersize=7,
-                    color=COLORS[kind], ecolor=COLORS[kind], elinewidth=1, capsize=0, markeredgecolor=SURFACE, markeredgewidth=1.5)
+    fig, ax = plt.subplots(figsize=(7.5, 4.8), facecolor=SURFACE)
     for row in points.itertuples():
-        ax.annotate(row.label, (getattr(row, x), row.accuracy_mean * 100), xytext=(5, 4), textcoords="offset points", fontsize=7, color=INK_2)
+        color, y = COLORS[row.model_type], row.accuracy_mean * 100
+        ax.errorbar(getattr(row, x), y, yerr=0 if np.isnan(row.accuracy_std) else row.accuracy_std * 100, fmt="o", markersize=7,
+                    color=color, ecolor=color, elinewidth=1, capsize=0, markeredgewidth=1.6,
+                    markerfacecolor=color if row.model in BANGLA_ONLY else SURFACE, zorder=3)
+        dx, dy, ha = LABELS[panel].get(row.model, (6, 2, "left"))
+        ax.annotate(NAMES.get(row.model, row.model), (getattr(row, x), y), xytext=(dx, dy), textcoords="offset points",
+                    ha=ha, va="center", fontsize=7.5, color=INK_2)
+    if panel != "params":
+        front = pareto(list(zip(points[x], points["accuracy_mean"] * 100)))
+        ax.step(*zip(*front), where="post", color=INK_2, linestyle="--", linewidth=0.9, zorder=2)
     ax.set_xscale("log")
+    if panel == "params":
+        ticks = [1e7, 3e7, 1e8, 3e8, 1e9]
+        ax.set_xticks(ticks, [f"{t / 1e6:g}M" if t < 1e9 else "1B" for t in ticks])
+        ax.xaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
+    lo, hi = points[x].min(), points[x].max()
+    ax.set_xlim(lo / 2.2, hi * 3)
     style(ax, xlabel, "test accuracy (%)", title)
-    legend(ax, set(points["kind"]))
+    handles = [plt.Line2D([], [], marker="o", linestyle="", markersize=7, markeredgewidth=1.6, color=COLORS[kind],
+                          markerfacecolor=COLORS[kind] if filled else SURFACE, label=f"{kind}, {langs}")
+               for kind in ("encoder", "seq2seq") for filled, langs in ((True, "Bangla-only"), (False, "multilingual"))]
+    if panel != "params":
+        handles.append(plt.Line2D([], [], color=INK_2, linestyle="--", linewidth=0.9, label="best trade-off (Pareto front)"))
+    ncol = 4 if len(handles) == 4 else 3
+    fig.legend(handles=handles, loc="lower center", ncol=ncol, frameon=False, fontsize=7.5, labelcolor=INK_2,
+               handletextpad=0.3, columnspacing=1.5)
+    fig.tight_layout(rect=(0, 0.05 * -(-len(handles) // ncol), 1, 1))
+    fig.savefig(out, dpi=200, facecolor=SURFACE)
+    plt.close(fig)
+
+
+def learning_curve_plot(curve: pd.DataFrame, types: dict[str, str]) -> None:
+    order = [m for m, _ in MODELS if m in set(curve["model"])]
+    cols = min(6, len(order))
+    rows = -(-len(order) // cols)
+    fig, axes = plt.subplots(rows, cols, figsize=(2.15 * cols, 2.0 * rows + 0.5), facecolor=SURFACE, sharex=True, sharey=True,
+                             squeeze=False)
+    for ax, model in zip(axes.flat, order):
+        for other, g in curve.groupby("model"):  # every other model in light gray behind this one
+            if other != model:
+                ax.plot(g["sentences_per_pronunciation"], g["accuracy_mean"] * 100, color="#d5d4cf", linewidth=0.8)
+        g = curve[curve["model"] == model]
+        color = COLORS[types.get(model, "encoder")]
+        ax.plot(g["sentences_per_pronunciation"], g["accuracy_mean"] * 100, color=color, linewidth=1.8, marker="o",
+                markersize=4.5, markeredgecolor=SURFACE, markeredgewidth=0.8, zorder=3)
+        for k, y in zip(g["sentences_per_pronunciation"], g["accuracy_mean"] * 100):
+            if y < LC_YMIN:
+                ax.plot(k, LC_YMIN + 0.8, marker="v", color=color, markersize=5, clip_on=False, zorder=4)
+                ax.annotate(f"{y:.1f}", (k, LC_YMIN + 0.8), xytext=(-4, 5), textcoords="offset points", fontsize=7, color=color)
+        ax.set_xticks(list(LEARNING_CURVE.values()))
+        ax.set_ylim(LC_YMIN, 100.5)
+        ax.set_xlim(1, 15)
+        style(ax, "", "", NAMES.get(model, model))
+    for ax in axes.flat[len(order):]:
+        ax.set_visible(False)
+    fig.supxlabel("training sentences per pronunciation (seed 42; 14 = main run)", color=INK_2, fontsize=9)
+    fig.supylabel("test accuracy (%)", color=INK_2, fontsize=9)
     fig.tight_layout()
-    fig.savefig(out, dpi=200)
+    fig.savefig(PLOTS / "learning_curves.png", dpi=200, facecolor=SURFACE)
+    plt.close(fig)
+
+
+def hardest_words_plot(words: pd.DataFrame) -> None:
+    hardest = words.groupby("spelling")["accuracy"].mean().sort_values().head(20)[::-1] * 100
+    font = font_manager.FontProperties(fname=BENGALI_FONT) if Path(BENGALI_FONT).exists() else None
+    fig, ax = plt.subplots(figsize=(6, 6), facecolor=SURFACE)
+    ax.barh(range(len(hardest)), hardest.values, color=COLORS["encoder"], height=0.62)
+    for i, v in enumerate(hardest.values):
+        ax.annotate(f"{v:.1f}", (v, i), xytext=(4, 0), textcoords="offset points", va="center", fontsize=7.5, color=INK_2)
+    ax.set_yticks(range(len(hardest)), hardest.index, fontproperties=font, fontsize=10)
+    ax.set_xlim(0, 105)
+    style(ax, "test accuracy (%), mean over models and seeds", "",
+          f"20 hardest words ({words['model'].nunique()} models, main split)")
+    ax.grid(axis="y", visible=False)
+    fig.tight_layout()
+    fig.savefig(PLOTS / "hardest_words.png", dpi=200, facecolor=SURFACE)
     plt.close(fig)
 
 
 def plots(summary: pd.DataFrame, curve: pd.DataFrame, words: pd.DataFrame) -> None:
     PLOTS.mkdir(parents=True, exist_ok=True)
-    main = summary[(summary["test_set"] == "test") & summary["setting"].isin(["main", "cand_main"])].copy()
-    main["kind"] = np.where(main["setting"] == "cand_main", "candidate", main["model_type"])
-    main["label"] = np.where(main["setting"] == "cand_main", main["model"] + " (cand)", main["model"])
-    scatter(main, "params", "parameters (log scale)", "Accuracy vs. model size", PLOTS / "accuracy_vs_params.png")
-    scatter(main, "gpu_p50_ms", "GPU p50 latency, batch 1, ms (log scale)", "Accuracy vs. GPU latency (Tesla T4)", PLOTS / "accuracy_vs_latency_gpu.png")
-    scatter(main, "cpu4_p50_ms", "CPU p50 latency, batch 1, 4 threads, ms (log scale)", "Accuracy vs. CPU latency", PLOTS / "accuracy_vs_latency_cpu.png")
-
+    # Main benchmark only; candidate scoring, the unseen split and the ablations are in summary.md and ablations.md.
+    main = summary[(summary["test_set"] == "test") & (summary["setting"] == "main")].copy()
+    scatter(main, "params", "parameters (log scale)", "Accuracy vs. model size (main split)", "params",
+            PLOTS / "accuracy_vs_params.png")
+    scatter(main, "gpu_p50_ms", "GPU p50 latency per sentence, batch 1, ms (log scale)", "Accuracy vs. GPU latency (Tesla T4)",
+            "gpu", PLOTS / "accuracy_vs_latency_gpu.png")
+    scatter(main, "cpu4_p50_ms", "CPU p50 latency per sentence, batch 1, 4 threads, ms (log scale)", "Accuracy vs. CPU latency",
+            "cpu", PLOTS / "accuracy_vs_latency_cpu.png")
     if not curve.empty:
-        models = list(dict.fromkeys(curve["model"]))
-        cols = min(4, len(models))
-        rows = -(-len(models) // cols)
-        fig, axes = plt.subplots(rows, cols, figsize=(3 * cols, 2.4 * rows), facecolor=SURFACE, sharex=True, sharey=True, squeeze=False)
-        for ax, model in zip(axes.flat, models):
-            for other, g in curve.groupby("model"):  # every other model in light gray behind this one
-                if other != model:
-                    ax.plot(g["sentences_per_pronunciation"], g["accuracy_mean"] * 100, color="#c3c2be", linewidth=1)
-            g = curve[curve["model"] == model]
-            ax.plot(g["sentences_per_pronunciation"], g["accuracy_mean"] * 100, color="#2a78d6", linewidth=2, marker="o",
-                    markersize=5, markeredgecolor=SURFACE)
-            ax.set_xticks(list(LEARNING_CURVE.values()))
-            style(ax, "sentences per pronunciation", "test accuracy (%)", model)
-        for ax in axes.flat[len(models):]:
-            ax.set_visible(False)
-        fig.tight_layout()
-        fig.savefig(PLOTS / "learning_curves.png", dpi=200)
-        plt.close(fig)
-
+        learning_curve_plot(curve, dict(zip(main["model"], main["model_type"])))
     if not words.empty:
-        hardest = words.groupby("spelling")["accuracy"].mean().sort_values().head(20)[::-1]
-        font = font_manager.FontProperties(fname=BENGALI_FONT) if Path(BENGALI_FONT).exists() else None
-        fig, ax = plt.subplots(figsize=(6, 6), facecolor=SURFACE)
-        ax.barh(range(len(hardest)), hardest.values * 100, color=COLORS["encoder"], height=0.7)
-        ax.set_yticks(range(len(hardest)), hardest.index, fontproperties=font, fontsize=10)
-        style(ax, "test accuracy (%), mean over models and seeds", "", f"Hardest words ({words['model'].nunique()} models, main split)")
-        ax.grid(axis="y", visible=False)
-        fig.tight_layout()
-        fig.savefig(PLOTS / "hardest_words.png", dpi=200)
-        plt.close(fig)
+        hardest_words_plot(words)
 
 
 def status(model: str) -> str:
