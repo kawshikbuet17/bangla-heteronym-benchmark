@@ -432,10 +432,59 @@ threads); `checkpoints/banglabert_small` is the fastest on a CPU (98.16%, 13 ms)
 (candidate scoring) is the most accurate (99.73%) but about 2 times slower on the GPU (23.8 ms) and 4 times slower on a CPU
 (139 ms). All are used the same way.
 
-How marked input works: the marks only choose which occurrence to read. They are removed before the model runs, and
-the model gets that sentence with its own training-time marker around the chosen word (`... আবার @ কর @।` for the
-encoders, `phonetic: ... আবার @ কর @।` for seq2seq), exactly as for every occurrence that `phoneticize` finds by
-itself. The reading is the model's prediction; putting it back into the text is plain string replacement.
+### What the model is called with
+
+Every method ends in the same model call. The methods only differ in how they pick the words to read:
+
+| Method | Words sent to the model |
+|---|---|
+| `phoneticize(text)` | every heteronym found in the text |
+| `predict(sentence, word)` | the first whole-word occurrence of `word` |
+| `predict_marked(text)` | the first marked word (marks removed) |
+| `phoneticize_marked(text)` | every marked word (marks removed) |
+| `*_batch([...])` | the same, for all inputs together |
+
+Each chosen word becomes one item `(sentence, start, end, word)`: the sentence that contains it (text split at `।`,
+`?`, `!` and newlines, at most 32 words kept on each side) and the word's character span. Items are padded into
+batches of up to 64 and each batch is one model call (one forward pass, or one `generate` call for seq2seq). Before the
+call the sentence is normalized (`csebuetnlp/normalizer`, BanglaBERT and BanglaT5 checkpoints only; the T5 models also
+drop the ZWNJ, which their tokenizers cannot keep) and the chosen word is wrapped in the training-time marker `@ word @`.
+Nothing else is added or removed.
+
+Real calls for `predict_marked("সরকার কর বাড়িয়েছে, তাই তুমি এখনই হিসাবটা আবার [কর]।")`, item
+`("সরকার কর বাড়িয়েছে, তাই তুমি এখনই হিসাবটা আবার কর।", 48, 50, "কর")`:
+
+**Encoder classifier** (`checkpoints/banglabert`, tokens as the tokenizer prints them). Input is the pair (word, marked
+sentence); the model returns one score per reading slot (slots the word does not have are masked); the reading is the
+argmax:
+
+```text
+[CLS] কর [SEP] সরকার কর বাড়িয়েছে , তাই তুমি এখনই হিসাব ##টা আবার @ কর @ । [SEP]
+softmax over কর্‌ / করো / কোরো: 0.0003 / 0.9699 / 0.0298   ->  করো
+```
+
+**Candidate scorer** (`checkpoints/banglabert_cand`). One pair (marked sentence, candidate reading) per reading, all
+in the same batch; one score each; the reading is the argmax:
+
+```text
+[CLS] সরকার কর বাড়িয়েছে , তাই তুমি এখনই হিসাব ##টা আবার @ কর @ । [SEP] কর্ [SEP]
+[CLS] সরকার কর বাড়িয়েছে , তাই তুমি এখনই হিসাব ##টা আবার @ কর @ । [SEP] করো [SEP]
+[CLS] সরকার কর বাড়িয়েছে , তাই তুমি এখনই হিসাব ##টা আবার @ কর @ । [SEP] কোরো [SEP]
+softmax: 0.0001 / 0.9995 / 0.0005   ->  করো
+```
+
+**Seq2seq** (`checkpoints/banglat5`). Input is text; the model generates the whole sentence with the word respelled
+(greedy decoding); the generated word at the target's position is matched to the word's readings:
+
+```text
+input    : phonetic: সরকার কর বাড়িয়েছে, তাই তুমি এখনই হিসাবটা আবার @ কর @।
+generated: সরকার কর বাড়িয়েছে, তাই তুমি এখনই হিসাবটা আবার করো।
+->  করো
+```
+
+The other words of the sentence (here the first কর) are only context. Afterwards the reading is put back at the word's
+position in your text (the `phoneticize*` methods) or returned on its own (the `predict*` methods); that part is plain
+string replacement.
 
 `phoneticize` splits the text on `।`, `?`, `!` and newlines, finds every whole-word occurrence of a known
 heteronym, marks one occurrence at a time, predicts all of them in one batch and rebuilds the exact text.
